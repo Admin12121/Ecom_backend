@@ -254,6 +254,9 @@ from django.db.models import Count, Q, Prefetch
 from collections import Counter
 from accounts.models import (SearchHistory )
 from rest_framework.permissions import IsAuthenticated , IsAuthenticatedOrReadOnly
+from django.db import transaction
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.exceptions import ValidationError
 
 class IsAdminOrReadOnly(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -290,6 +293,98 @@ class ProductViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, IsAdminOrReadOnly]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        is_multi_variant = data.get('is_multi_variant', 'false').lower() == 'true'
+        variants_data = self._extract_variants_data(data)
+        images_data = self._extract_images_data(data)
+
+        with transaction.atomic():
+            try:
+                print("initialize")
+                product_serializer = self.get_serializer(data=data)
+                product_serializer.is_valid(raise_exception=True)
+                product = product_serializer.save()
+
+                if is_multi_variant:
+                    print("processing 1")
+                    self._create_variants(variants_data, product)
+                else:
+                    print("processing 2")
+                    self._create_single_variant(data, product)
+
+                print("assigining image")
+                self._save_images(images_data, product)
+
+                headers = self.get_success_headers(product_serializer.data)
+                return Response(product_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+            except ValidationError as ve:
+                transaction.set_rollback(True)
+                return Response({'error': ve.detail}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                transaction.set_rollback(True)
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _extract_variants_data(self, data):
+        variants_data = []
+        index = 0
+        while True:
+            size = data.get(f'variants[{index}][size]')
+            price = data.get(f'variants[{index}][price]')
+            stock = data.get(f'variants[{index}][stock]')
+            discount = data.get(f'variants[{index}][discount]')
+            if size or price or stock or discount:
+                variant = {
+                    'size': size,
+                    'price': price,
+                    'stock': stock,
+                    'discount': discount
+                }
+                variants_data.append(variant)
+                index += 1
+            else:
+                break
+        return variants_data
+
+    def _extract_images_data(self, data):
+        images_data = []
+        index = 0
+        while True:
+            image = data.get(f'images[{index}]')
+            if image:
+                images_data.append(image)
+                index += 1
+            else:
+                break
+        return images_data
+
+    def _create_variants(self, variants_data, product):
+        for variant_data in variants_data:
+            variant_data['product'] = product.id
+            variant_serializer = ProductVariantSerializer(data=variant_data)
+            variant_serializer.is_valid(raise_exception=True)
+            variant_serializer.save()
+
+    def _create_single_variant(self, single_variant_data, product):
+        single_variant_data['product'] = product.id
+        variant_serializer = ProductVariantSerializer(data=single_variant_data)
+        variant_serializer.is_valid(raise_exception=True)
+        variant_serializer.save()
+
+    def _save_images(self, images_data, product):
+        print("initialized images")
+        for image in images_data:
+            print(image)
+            if image:
+                image_data = {'product': product.id, 'image': image}
+                print("data verified", image_data)
+                image_serializer = ProductImageSerializer(data=image_data)
+                print(image_serializer)
+                image_serializer.is_valid(raise_exception=True)
+                print("certificated")
+                image_serializer.save()
 
     def get_queryset(self):
         queryset = super().get_queryset()

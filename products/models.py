@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
-from .utils import validate_image_format, compress_image, generate_slug
+from .utils import validate_image_format, compress_image, generate_slug , generate_unique_slug
 
 class Category(models.Model):
     name = models.CharField(max_length=255,unique=True)
@@ -32,7 +32,7 @@ class Product(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.productslug:
-            self.productslug = generate_slug(self.product_name)
+            self.productslug = generate_unique_slug(self.product_name, Product)
         super().save(*args, **kwargs)
         
     class Meta:
@@ -45,7 +45,7 @@ class Product(models.Model):
 
 class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    product_stripe_id = models.CharField(max_length=255)
+    product_stripe_id = models.CharField(max_length=255, null=True, blank=True)
     size = models.CharField(max_length=50, null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
@@ -54,21 +54,21 @@ class ProductVariant(models.Model):
     def __str__(self):
         return f"{self.product.product_name} - {self.size or 'Single'}"
 
-def validate_image_limit(value):
-    if value.variant.images.count() >= 5:
-        raise ValidationError('You can only upload a maximum of 5 images per product variant.')
 
 class ProductImage(models.Model):
-    variant = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
-    image = models.ImageField(upload_to='product_images/', validators=[validate_image_format, validate_image_limit])
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='product_images/', validators=[validate_image_format])
 
     def save(self, *args, **kwargs):
+        if self.product.images.count() >= 5:
+            raise ValidationError('You can only upload a maximum of 5 images per product.')
+                
         if self.image:
             self.image = compress_image(self.image)
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.variant.product.product_name} - {self.variant.size or 'Single'} Image"
+        return f"{self.product.product_name} Image"
 
 class Review(models.Model):
     product = models.ForeignKey(Product, related_name='reviews', on_delete=models.CASCADE)

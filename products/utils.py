@@ -5,6 +5,7 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 import sys
 import random
 import string
+from django.utils.text import slugify
 
 def validate_image_format(image):
     if not image.name.lower().endswith('.png'):
@@ -32,3 +33,23 @@ def generate_slug(*args):
     slug_fields = [str(arg).lower() for arg in args if arg]
     slug = '-'.join(map(remove_space, slug_fields))
     return f"{slug}{generate_random_code()}"
+
+def generate_unique_slug(product_name, model):
+    base_slug = slugify(product_name)
+
+    base_slug = base_slug[:20]
+    random_str = ''.join(random.choices(string.ascii_letters + string.digits + '-_', k=10))
+    slug = f"{base_slug}-{random_str}"
+
+    while len(slug) < 30:
+        extra_str = ''.join(random.choices(string.ascii_letters + string.digits + '-_', k=1))
+        slug = f"{slug}{extra_str}"
+
+    slug = slug[:35]
+
+    while model.objects.filter(productslug=slug).exists():
+        random_str = ''.join(random.choices(string.ascii_letters + string.digits + '-_', k=10))
+        slug = f"{base_slug}-{random_str}"
+        slug = slug[:35]
+
+    return slug

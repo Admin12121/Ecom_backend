@@ -20,77 +20,26 @@ class ProductImageSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ProductVariantSerializer(serializers.ModelSerializer):
-    images = ProductImageSerializer(many=True, required=False)
-
     class Meta:
         model = ProductVariant
         fields = '__all__'
 
 class ProductSerializer(serializers.ModelSerializer):
-    variants = ProductVariantSerializer(many=True, required=False)
-    images = ProductImageSerializer(source='variants.images', many=True, read_only=True)
-
     class Meta:
         model = Product
         fields = '__all__'
+    
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
 
-    def create(self, validated_data):
-        is_multi_variant = validated_data.pop('is_multi_variant', False)
-        variants_data = validated_data.pop('variants', [])
-        product = Product.objects.create(**validated_data, is_multi_variant=is_multi_variant)
+        request = self.context.get('request')
+        if request and request.method == 'GET':
+            variants = instance.productvariant_set.all()
+            images = instance.images.all()
+            representation['variants'] = ProductVariantSerializer(variants, many=True).data
+            representation['images'] = ProductImageSerializer(images, many=True).data
 
-        if is_multi_variant:
-            for variant_data in variants_data:
-                images_data = variant_data.pop('images', [])
-                variant = ProductVariant.objects.create(product=product, **variant_data)
-                for image_data in images_data:
-                    ProductImage.objects.create(variant=variant, **image_data)
-        else:
-            # Create a single variant if is_multi_variant is False
-            images_data = variants_data.pop('images', [])
-            variant = ProductVariant.objects.create(product=product, **variants_data[0])
-            for image_data in images_data:
-                ProductImage.objects.create(variant=variant, **image_data)
-
-        return product
-
-    def update(self, instance, validated_data):
-        is_multi_variant = validated_data.pop('is_multi_variant', instance.is_multi_variant)
-        variants_data = validated_data.pop('variants', [])
-        
-        instance.product_name = validated_data.get('product_name', instance.product_name)
-        instance.description = validated_data.get('description', instance.description)
-        instance.category = validated_data.get('category', instance.category)
-        instance.subcategory = validated_data.get('subcategory', instance.subcategory)
-        instance.is_multi_variant = is_multi_variant
-        instance.save()
-
-        if is_multi_variant:
-            for variant_data in variants_data:
-                variant_id = variant_data.get('id')
-                if variant_id:
-                    variant = ProductVariant.objects.get(id=variant_id, product=instance)
-                    variant.size = variant_data.get('size', variant.size)
-                    variant.price = variant_data.get('price', variant.price)
-                    variant.stock = variant_data.get('stock', variant.stock)
-                    variant.discount = variant_data.get('discount', variant.discount)
-                    variant.save()
-                else:
-                    images_data = variant_data.pop('images', [])
-                    variant = ProductVariant.objects.create(product=instance, **variant_data)
-                    for image_data in images_data:
-                        ProductImage.objects.create(variant=variant, **image_data)
-        else:
-            variant = ProductVariant.objects.get(product=instance)
-            variant.size = variants_data[0].get('size', variant.size)
-            variant.price = variants_data[0].get('price', variant.price)
-            variant.stock = variants_data[0].get('stock', variant.stock)
-            variant.discount = variants_data[0].get('discount', variant.discount)
-            variant.save()
-
-        return instance
-
-
+        return representation
 class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
