@@ -14,9 +14,16 @@ def validate_image_format(image):
 def compress_image(image, format='PNG', quality=85):
     try:
         image_temporary = Image.open(image)
-        image_temporary = image_temporary.convert('RGBA' if format == 'PNG' else 'RGB')
+        # image_temporary = image_temporary.convert('RGBA' if format == 'PNG' else 'RGB')
+        # output_io_stream = BytesIO()
+        # image_temporary.save(output_io_stream, format=format, optimize=True, quality=quality)
+        # output_io_stream.seek(0)
+
+        image_temporary = image_temporary.convert('RGBA')
+        image_temporary = image_temporary.quantize(method=2)
+        
         output_io_stream = BytesIO()
-        image_temporary.save(output_io_stream, format=format, optimize=True, quality=quality)
+        image_temporary.save(output_io_stream, format=format, optimize=True)
         output_io_stream.seek(0)
         image = InMemoryUploadedFile(output_io_stream, 'ImageField', f"{image.name.split('.')[0]}.{format.lower()}", f'image/{format.lower()}', sys.getsizeof(output_io_stream), None)
     except Exception as e:

@@ -19,16 +19,34 @@ class ProductImageSerializer(serializers.ModelSerializer):
         model = ProductImage
         fields = '__all__'
 
+class ImageDataSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()    
+    class Meta:
+        model = ProductImage
+        fields = ['image']
+
+    def get_image(self, obj):
+        request = self.context.get('request')
+        return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+
 class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariant
         fields = '__all__'
 
 class ProductSerializer(serializers.ModelSerializer):
+    categoryname = serializers.SerializerMethodField()
+    subcategoryname = serializers.SerializerMethodField()    
     class Meta:
         model = Product
         fields = '__all__'
     
+    def get_categoryname(self, obj):
+        return obj.category.name if obj.category else None
+
+    def get_subcategoryname(self, obj):
+        return obj.subcategory.name if obj.subcategory else None
+
     def to_representation(self, instance):
         representation = super().to_representation(instance)
 
@@ -36,8 +54,22 @@ class ProductSerializer(serializers.ModelSerializer):
         if request and request.method == 'GET':
             variants = instance.productvariant_set.all()
             images = instance.images.all()
-            representation['variants'] = ProductVariantSerializer(variants, many=True).data
-            representation['images'] = ProductImageSerializer(images, many=True).data
+            if self.context.get('is_detail', False):
+                reviews = instance.reviews.all()
+                comments = instance.comments.all()
+
+                representation['reviews'] = ReviewSerializer(reviews, many=True, context=self.context).data
+                representation['comments'] = CommentSerializer(comments, many=True, context=self.context).data
+
+
+            variants_data = ProductVariantSerializer(variants, many=True).data
+            if len(variants_data) == 1:
+                representation['variants'] = variants_data[0]
+            else:
+                representation['variants'] = variants_data 
+            representation['images'] = ImageDataSerializer(images, many=True, context= self.context).data
+            representation['categoryname'] = self.get_categoryname(instance)
+            representation['subcategoryname'] = self.get_subcategoryname(instance)            
 
         return representation
 class ReviewSerializer(serializers.ModelSerializer):
