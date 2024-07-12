@@ -257,6 +257,16 @@ from rest_framework.permissions import IsAuthenticated , IsAuthenticatedOrReadOn
 from django.db import transaction
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from rest_framework.pagination import PageNumberPagination
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 
 class IsAdminOrReadOnly(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -266,7 +276,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
 
 class CategoryView(APIView):
      def post(self, request, format=None):
-           print(request.data)
+        #    print(request.data)
            return Response({"Successfull"}, status=status.HTTP_200_OK)
 
 
@@ -286,15 +296,12 @@ class SubcategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.prefetch_related(
-        Prefetch('productvariant_set'),
-        Prefetch('reviews'),
-        Prefetch('comments')
-    ).all()
+    queryset = Product.objects.select_related('category', 'subcategory').prefetch_related('productvariant_set', 'reviews', 'comments').all()
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, IsAdminOrReadOnly]
     parser_classes = [MultiPartParser, FormParser]
-
+    pagination_class = StandardResultsSetPagination
+    
     def create(self, request, *args, **kwargs):
         data = request.data
         is_multi_variant = data.get('is_multi_variant', 'false').lower() == 'true'
@@ -303,19 +310,14 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             try:
-                print("initialize")
                 product_serializer = self.get_serializer(data=data)
                 product_serializer.is_valid(raise_exception=True)
                 product = product_serializer.save()
 
                 if is_multi_variant:
-                    print("processing 1")
                     self._create_variants(variants_data, product)
                 else:
-                    print("processing 2")
                     self._create_single_variant(data, product)
-
-                print("assigining image")
                 self._save_images(images_data, product)
 
                 headers = self.get_success_headers(product_serializer.data)
@@ -374,16 +376,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         variant_serializer.save()
 
     def _save_images(self, images_data, product):
-        print("initialized images")
         for image in images_data:
-            print(image)
             if image:
                 image_data = {'product': product.id, 'image': image}
-                print("data verified", image_data)
                 image_serializer = ProductImageSerializer(data=image_data)
-                print(image_serializer)
                 image_serializer.is_valid(raise_exception=True)
-                print("certificated")
                 image_serializer.save()
 
     def get_queryset(self):
@@ -437,6 +434,22 @@ class ProductViewSet(viewsets.ModelViewSet):
             trending_products = Product.objects.none()
 
         return trending_products
+
+    @method_decorator(cache_page(60*15))  # Cache for 15 minutes    def retrieve(self, request, *args, **kwargs):
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, context={'request': request, 'is_detail': True})
+        return Response(serializer.data)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True, context={'request': request, 'is_detail': False})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True, context={'request': request, 'is_detail': False})
+        return Response(serializer.data)
 
 class TrendingView(APIView):
     def get(self, request, format=None):

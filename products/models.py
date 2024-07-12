@@ -3,6 +3,7 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from .utils import validate_image_format, compress_image, generate_slug , generate_unique_slug
+import os
 
 class Category(models.Model):
     name = models.CharField(max_length=255,unique=True)
@@ -38,6 +39,8 @@ class Product(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['id', 'product_name']),
+            models.Index(fields=['category']),
+            models.Index(fields=['subcategory']),
         ]
 
     def __str__(self):
@@ -51,6 +54,11 @@ class ProductVariant(models.Model):
     discount = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     stock = models.PositiveIntegerField()
 
+    # class Meta:
+    #     constraints = [
+    #         models.UniqueConstraint(fields=['product'], name='unique_product_size')
+    #     ]
+
     def __str__(self):
         return f"{self.product.product_name} - {self.size or 'Single'}"
 
@@ -58,6 +66,12 @@ class ProductVariant(models.Model):
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to='product_images/', validators=[validate_image_format])
+
+    def delete(self, *args, **kwargs):
+        if self.image:
+            if os.path.isfile(self.image.path):
+                os.remove(self.image.path)
+        super().delete(*args, **kwargs)
 
     def save(self, *args, **kwargs):
         if self.product.images.count() >= 5:
