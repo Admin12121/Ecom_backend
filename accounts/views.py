@@ -7,7 +7,7 @@ from .models import User, UserDevice
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserDataSerializer,
     UserChangePasswordSerializer, SendUserPasswordResetEmailSerializer,
-    UserPasswordResetSerializer, AdminUserDataSerializer, UserDeviceSerializer
+    UserPasswordResetSerializer, AdminUserDataSerializer, UserDeviceSerializer, CustomSocialLoginSerializer
 )
 from .renderers import UserRenderer
 from .tokens import generate_token
@@ -23,6 +23,9 @@ from django_otp.util import random_hex
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
 from django_otp.oath import TOTP
+from allauth.socialaccount.models import SocialAccount
+from dj_rest_auth.registration.views import SocialLoginView
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -31,6 +34,19 @@ def get_tokens_for_user(user):
         'refresh': str(refresh),
         'access': str(refresh.access_token),
     }
+
+
+class GoogleLogin(SocialLoginView):
+    adapter_class = GoogleOAuth2Adapter
+    serializer_class = CustomSocialLoginSerializer
+    
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)    
+        user = self.request.user
+        tokens = get_tokens_for_user(user)
+        response.data.update(tokens)
+        return response
+
 
 class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin):
     queryset = User.objects.all()

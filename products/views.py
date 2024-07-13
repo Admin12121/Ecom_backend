@@ -253,19 +253,25 @@ from django.utils import timezone
 from django.db.models import Count, Q, Prefetch
 from collections import Counter
 from accounts.models import (SearchHistory )
-from rest_framework.permissions import IsAuthenticated , IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated , IsAuthenticatedOrReadOnly, AllowAny
 from django.db import transaction
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
     max_page_size = 100
 
+class CustomReadOnly(BasePermission):    
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS:
+            return True
+        return request.user and request.user.is_authenticated
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):
@@ -298,7 +304,7 @@ class SubcategoryViewSet(viewsets.ModelViewSet):
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.select_related('category', 'subcategory').prefetch_related('productvariant_set', 'reviews', 'comments').all()
     serializer_class = ProductSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly, IsAdminOrReadOnly]
+    permission_classes = [CustomReadOnly]
     parser_classes = [MultiPartParser, FormParser]
     pagination_class = StandardResultsSetPagination
     
@@ -405,13 +411,13 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         return queryset.filter(filters).distinct()
 
-    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def recommended(self, request):
         recommended_products = get_recommended_products(request.user)
         serializer = self.get_serializer(recommended_products, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def trending(self, request):
         trending_products = self.get_trending_products()
         serializer = self.get_serializer(trending_products, many=True)
@@ -450,6 +456,13 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True, context={'request': request, 'is_detail': False})
         return Response(serializer.data)
+
+    # def get_permissions(self):
+    #     if self.request.method in SAFE_METHODS:
+    #         self.permission_classes = [AllowAny]
+    #     else:
+    #         self.permission_classes = [IsAuthenticated]
+    #     return super(ProductViewSet, self).get_permissions()
 
 class TrendingView(APIView):
     def get(self, request, format=None):

@@ -94,7 +94,7 @@ class Review(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f'{self.user.username} - {self.product.product_name} - {self.rating}'
+        return f'{self.user.email} - {self.product.product_name} - {self.rating}'
 
 class ReviewImage(models.Model):
     review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name="review_images", null=True, blank=True)
@@ -117,7 +117,7 @@ class Comment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f'{self.user.username} - {self.product.product_name}'
+        return f'{self.user.email} - {self.product.product_name}'
 
 class CommentReply(models.Model):
     comment = models.ForeignKey(Comment, related_name='replies', on_delete=models.CASCADE)
@@ -127,4 +127,4 @@ class CommentReply(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f'{self.user.username} - Reply to {self.comment.id}'
+        return f'{self.user.email} - Reply to {self.comment.id}'

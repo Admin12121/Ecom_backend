@@ -43,6 +43,9 @@ INSTALLED_APPS = [
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',    
+    'dj_rest_auth',
+    'dj_rest_auth.registration',    
 ]
 
 MIDDLEWARE = [
@@ -162,3 +165,37 @@ SIMPLE_JWT = {
 PASSWORD_RESET_TIMEOUT=300          # 300 Sec = 5 Min
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+SITE_ID = 1
+
+AUTHENTICATION_BACKENDS = (
+    'django.contrib.auth.backends.ModelBackend',  # Default Django authentication backend
+    'allauth.account.auth_backends.AuthenticationBackend',  # allauth authentication backend
+)
+
+
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
+
+
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': [
+            'profile',
+            'email',
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/user.gender.read',
+            'https://www.googleapis.com/auth/user.birthday.read'
+        ],
+        'FIELDS': [
+            'email',
+            'first_name',
+            'last_name',
+            'picture',
+            'gender',
+            'birthdate'
+        ],
+    },
+}
+
+SOCIALACCOUNT_ADAPTER = 'accounts.adapters.CustomSocialAccountAdapter'
