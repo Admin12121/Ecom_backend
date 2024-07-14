@@ -307,6 +307,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     permission_classes = [CustomReadOnly]
     parser_classes = [MultiPartParser, FormParser]
     pagination_class = StandardResultsSetPagination
+    # pagination_class = None
     
     def create(self, request, *args, **kwargs):
         data = request.data
@@ -391,25 +392,31 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        category = self.request.query_params.get('category')
-        subcategory = self.request.query_params.get('subcategory')
-        min_price = self.request.query_params.get('min_price')
-        max_price = self.request.query_params.get('max_price')
-        search = self.request.query_params.get('search')
+        productslug = self.request.query_params.get('productslug')
+        
+        if productslug:
+            queryset = queryset.filter(productslug=productslug)
+        else:        
+            category = self.request.query_params.get('category')
+            subcategory = self.request.query_params.get('subcategory')
+            min_price = self.request.query_params.get('min_price')
+            max_price = self.request.query_params.get('max_price')
+            search = self.request.query_params.get('search')
 
-        filters = Q()
-        if category:
-            filters &= Q(category__name__icontains=category)
-        if subcategory:
-            filters &= Q(subcategory__name__icontains=subcategory)
-        if min_price:
-            filters &= Q(productvariant__price__gte=min_price)
-        if max_price:
-            filters &= Q(productvariant__price__lte=max_price)
-        if search:
-            filters &= Q(product_name__icontains=search) | Q(description__icontains=search)
-
-        return queryset.filter(filters).distinct()
+            filters = Q()
+            if category:
+                filters &= Q(category__name__icontains=category)
+            if subcategory:
+                filters &= Q(subcategory__name__icontains=subcategory)
+            if min_price:
+                filters &= Q(productvariant__price__gte=min_price)
+            if max_price:
+                filters &= Q(productvariant__price__lte=max_price)
+            if search:
+                filters &= Q(product_name__icontains=search) | Q(description__icontains=search)
+            queryset = queryset.filter(filters).distinct()
+        
+        return queryset
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def recommended(self, request):
@@ -441,28 +448,52 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         return trending_products
 
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def get_products_by_ids(self, request):
+        ids = request.query_params.get('ids', None)
+        if ids:
+            ids_list = ids.split(',')
+            queryset = self.queryset.filter(id__in=ids_list)
+            
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True, context={'request': request, 'is_detail': False})
+                return self.get_paginated_response(serializer.data)
+
+            serializer = self.get_serializer(queryset, many=True, context={'request': request, 'is_detail': False})
+            return Response(serializer.data)
+        else:
+            return Response({"error": "No IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
+        
+
     @method_decorator(cache_page(60*15))  # Cache for 15 minutes    def retrieve(self, request, *args, **kwargs):
     def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
+        productslug = request.query_params.get('productslug')
+        if productslug:
+            instance = get_object_or_404(self.get_queryset(), productslug=productslug)
+        else:
+            instance = self.get_object()
+        
         serializer = self.get_serializer(instance, context={'request': request, 'is_detail': True})
         return Response(serializer.data)
 
     def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True, context={'request': request, 'is_detail': False})
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(queryset, many=True, context={'request': request, 'is_detail': False})
-        return Response(serializer.data)
-
-    # def get_permissions(self):
-    #     if self.request.method in SAFE_METHODS:
-    #         self.permission_classes = [AllowAny]
-    #     else:
-    #         self.permission_classes = [IsAuthenticated]
-    #     return super(ProductViewSet, self).get_permissions()
+        productslug = request.query_params.get('productslug')
+        if productslug:
+            # Get the single product object based on the slug
+            instance = get_object_or_404(self.get_queryset(), productslug=productslug)
+            serializer = self.get_serializer(instance, context={'request': request, 'is_detail': True})
+            return Response(serializer.data)
+        else:
+            # Use pagination for other cases
+            queryset = self.filter_queryset(self.get_queryset())
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True, context={'request': request, 'is_detail': False})
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.get_serializer(queryset, many=True, context={'request': request, 'is_detail': False})
+            return Response(serializer.data)
 
 class TrendingView(APIView):
     def get(self, request, format=None):
