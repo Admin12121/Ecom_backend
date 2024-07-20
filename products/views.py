@@ -1,241 +1,3 @@
-# from rest_framework.response import Response
-# from rest_framework import status
-# from rest_framework.views import APIView
-# from .serializers import *
-# from accounts.models import SearchHistory
-# from accounts.renderers import UserRenderer
-# from rest_framework.permissions import IsAuthenticated , IsAuthenticatedOrReadOnly
-# from rest_framework.pagination import PageNumberPagination
-# from ecom_backend import settings
-# from django.db.models import F, Q
-# from django.utils import timezone
-# import json
-# from datetime import datetime
-# import random
-# from django.shortcuts import get_object_or_404
-# from collections import Counter
-
-# import random
-
-# from django.utils import timezone
-
-
-# class TrendingView(APIView):
-#     def get(self, request, format=None):
-#         all_time_trending_keywords = self.get_trending_keywords(all_time=True)
-#         this_week_top_search_keywords = self.get_trending_keywords(all_time=False)
-#         all_time_best_performing_products = self.get_best_performing_products()
-#         trending_data = {
-#             'all_time_trending_keywords': all_time_trending_keywords,
-#             'this_week_top_search_keywords': this_week_top_search_keywords,
-#             'all_time_best_performing_products': all_time_best_performing_products,
-#         }
-
-#         return Response(trending_data, status=status.HTTP_200_OK)
-
-#     def get_trending_keywords(self, all_time=True):
-#         if all_time:
-#             search_history = SearchHistory.objects.all()
-#         else:
-#             start_date = timezone.now() - timezone.timedelta(days=7)
-#             search_history = SearchHistory.objects.filter(search_date__gte=start_date)
-
-#         keyword_counter = Counter([history.keyword for history in search_history])
-#         trending_keywords = [keyword for keyword, _ in keyword_counter.most_common(3)]
-#         trending_products = Products.objects.filter(product_name__icontains=trending_keywords[0]).distinct()
-
-#         return trending_products
-
-#     def get_best_performing_products(self):
-#         product_counter = Counter([history.product for history in SearchHistory.objects.all()])
-#         best_performing_products = [product for product, _ in product_counter.most_common(3)]
-#         trending_products = Products.objects.filter(product_name__in=best_performing_products).distinct()
-
-#         return trending_products
-
-
-# def get_recommended_products(user):
-#     search_history = SearchHistory.objects.filter(user=user)
-#     if not search_history.exists():
-#         return Products.objects.order_by('?')[:10]  # Return 10 random products
-
-#     keywords = [history.keyword for history in search_history]
-#     keyword_counter = Counter(keywords)
-#     most_searched_keywords = keyword_counter.most_common(3)
-#     recommended_keywords = [keyword[0] for keyword in most_searched_keywords]
-#     recommended_products = Products.objects.filter(
-#         product_name__icontains=recommended_keywords[0]
-#     ).distinct()
-#     return recommended_products
-
-# class RecommendationView(APIView):
-#     def get(self, request, format=None):
-#         user = request.user
-#         recommended_products = get_recommended_products(user)
-#         serializer = ProductsSerializer(recommended_products, many=True, context={'request': request})
-#         return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-# class CategoryView(APIView):
-#     renderer_classes = [UserRenderer]
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request, format=None):
-#           category = request.query_params.get('name')
-
-#           if category:
-#               category = Category.objects.filter(category__icontains=category)
-#           else:
-#               category = Category.objects.all()
-#           serializer = CategorySerializer(category, many=True,context={'request': request})
-#           return Response(serializer.data, status=status.HTTP_200_OK)
-
-#     def post(self, request, format=None):
-#         serializer = CategorySerializer(data=request.data)
-#         serializer.is_valid(raise_exception=True)
-
-#         category = request.data.get('category')
-#         if(Category.objects.filter(category=category)).exists():
-#             return Response({'error': f'{category} already exists in this store'}, status=status.HTTP_400_BAD_REQUEST)
-
-#         serializer.save()
-#         return Response({'msg': 'Category added'}, status=status.HTTP_201_CREATED)
-   
-#     def patch(self,request,*args,**kwargs):
-#       id = request.query_params.get('id')
-#       if id:
-#         try:
-#           category = Category.objects.get(id=id)
-#           category_name = category.category
-#           serializer = CategorySerializer(category,data=request.data, partial= True)
-#           if serializer.is_valid():
-#              serializer.save()
-#              return Response({'msg': f'Category {category_name} updated'}, status=status.HTTP_200_OK)
-#           return Response({'msg': 'invalid data'}, status=status.HTTP_403_FORBIDDEN)
-#         except Exception as e:
-#             return Response({'msg': 'invalid id'}, status=status.HTTP_403_FORBIDDEN)
-    
-#     def delete(self, request, *args, **kwargs):
-#         id = request.query_params.get('id')
-#         if id:
-#             try:
-#                 category = Category.objects.get(id=id)
-#                 category_name = category.category
-#                 category.delete()
-#                 return Response({'msg': f'Category {category_name} deleted successfully'}, status=status.HTTP_200_OK)
-#             except Exception as e:
-#                 return Response({'msg': 'invalid id'}, status=status.HTTP_403_FORBIDDEN)
-
-# class ProductsView(APIView):
-#     renderer_classes = [UserRenderer]
-#     # permission_classes = [IsAuthenticated]
-
-#     # def post(self, request, format=None):
-#     #     serializer = ProductsSerializer(data=request.data)
-
-#     #     cat = request.data.get('category')
-#     #     variable_data = request.data.get('rowData')
-#     #     user = self.request.user
-#     #     images_data = request.FILES.getlist('preview_images')
-
-#     #     category = get_object_or_404(Category, id=cat)
-#     #     products = request.data.get('product_name')
-
-#     #     if Products.objects.filter(product_name=products).exists():
-#     #         return Response({'errors': {'product_name': [f'{products} already exists in this store.']}}, status=status.HTTP_400_BAD_REQUEST)
-#     #     else:
-#     #         if serializer.is_valid(raise_exception=True):
-#     #             product = serializer.save(category=category, createdby=user)
-#     #             for img_data in images_data:
-#     #                 Product_images.objects.create(product=product, preview_image=img_data)
-
-#     #             try:
-#     #                 variant_data = json.loads(variable_data)  # Parse the JSON data
-#     #                 for data in variant_data:
-#     #                     variant_category_name = data.get('variantion')  # Corrected key name
-#     #                     variant_values = data.get('variantValues')  # Corrected key name
-#     #                     quantity_alert = data.get('quantity_alert')
-#     #                     quantity = data.get('quantity')
-#     #                     price = data.get('price')
-
-#     #                     variant_category, _ = Varient_Category.objects.get_or_create(product=product, name=variant_category_name)
-
-#     #                     variant_ids = []  # Store variant IDs for each variant combination
-#     #                     for varient_name, value in variant_values.items():
-#     #                         varient_category, _ = Varient_Category.objects.get_or_create(product=product, name=varient_name)
-#     #                         variant_name_obj, _ = Varient_name.objects.get_or_create(product=product, varient_category=varient_category, name=value)
-#     #                         variant_ids.append(variant_name_obj.id)  # Add variant ID to the list
-
-#     #                     # Create a single Varientdata instance for each combination
-#     #                     variant_data_obj = Varientdata.objects.create(product=product, name=None, quantity_alert=quantity_alert, quantity=quantity, price=price)
-#     #                     variant_data_obj.varient.add(*variant_ids)  # Add all variant IDs to the many-to-many relationship
-
-#     #             except Exception as e:
-#     #                 print("Error:", e)
-
-#     #             return Response({'msg': 'Product Saved'}, status=status.HTTP_200_OK)
-#     #         else:
-#     #             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-#     def get(self, request, format=None):
-#           product_name = request.query_params.get('product_name')
-#           id = request.query_params.get('id')
-
-#           if product_name:
-#               product = Products.objects.filter( product_name__icontains=product_name)
-#           elif product_name and id:
-#                 product = Products.objects.filter(product_name=product_name, id=id)
-#           else:
-#               product = Products.objects.all()
-#           serializer = ProductsSerializer(product, many=True,context={'request': request})
-#           return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-#     # def delete(self, request, *args, **kwargs):
-#     #     id = request.query_params.get('id')
-#     #     if id:
-#     #         try:
-#     #             product = Products.objects.get(id=id)
-#     #             product_name = product.product_name
-#     #             product.delete()
-#     #             return Response({'msg': f'{product_name} is deleted successfully'}, status=status.HTTP_200_OK)
-#     #         except Exception as e:
-#     #             return Response({'msg': 'invalid id'}, status=status.HTTP_403_FORBIDDEN)
-
-# class ProductImageView(APIView):
-#     def post(self, request, format=None):
-#         serializer = ProductImageSerializer(data=request.data)
-#         product = request.data.get('product')
-#         try:
-#             product = Products.objects.get(id = product)
-#         except Products.DoesNotExist:
-#             return Response({'error':'Product does not exist'}, status=status.HTTP_400_BAD_REQUEST)
-        
-#         if serializer.is_valid(raise_exception=True):
-#         #    serializer.save(product = product)
-#            return Response({'msg':'Product images Saved'}, status=status.HTTP_200_OK)
-#         else: 
-#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-# class ForeignKeyView(APIView):
-#     renderer_classes = [UserRenderer]
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request, format=None):
-
-#           categories = Category.objects.all()
-#           varient_category = [
-#               {"varient":"Color"},
-#               {"varient":"Size"},
-#               {"varient":"Memory"},
-#           ]
-#           serializer = {
-#             'categories': CategoryListSerializer(categories, many=True).data,
-#             'varient_category' : varient_category
-#            }
-#           return Response(serializer, status=status.HTTP_200_OK)
-
-
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -291,10 +53,6 @@ class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [IsAdminOrReadOnly]
 
-    # def get_serializer_class(self):
-    #     if self.request.method == 'GET':
-    #         return CategorySerializer
-    #     return CategorySerializer
 
 class SubcategoryViewSet(viewsets.ModelViewSet):
     queryset = Subcategory.objects.select_related('category').all()
@@ -311,6 +69,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         data = request.data
+        print(data)
         is_multi_variant = data.get('is_multi_variant', 'false').lower() == 'true'
         variants_data = self._extract_variants_data(data)
         images_data = self._extract_images_data(data)
@@ -398,7 +157,9 @@ class ProductViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(productslug=productslug)
         else:        
             category = self.request.query_params.get('category')
+            categoryslug = self.request.query_params.get('categoryslug')
             subcategory = self.request.query_params.get('subcategory')
+            subcategoryslug = self.request.query_params.get('subcategoryslug')
             min_price = self.request.query_params.get('min_price')
             max_price = self.request.query_params.get('max_price')
             search = self.request.query_params.get('search')
@@ -406,8 +167,12 @@ class ProductViewSet(viewsets.ModelViewSet):
             filters = Q()
             if category:
                 filters &= Q(category__name__icontains=category)
+            if categoryslug:
+                filters &= Q(category__categoryslug__icontains=categoryslug)
             if subcategory:
                 filters &= Q(subcategory__name__icontains=subcategory)
+            if subcategoryslug:
+                filters &= Q(subcategory__subcategoryslug__icontains=subcategoryslug)
             if min_price:
                 filters &= Q(productvariant__price__gte=min_price)
             if max_price:
@@ -521,13 +286,13 @@ class RecommendationView(APIView):
     def get(self, request, format=None):
         user = request.user
         recommended_products = get_recommended_products(user)
-        serializer = ProductSerializer(recommended_products, many=True)
+        serializer = ProductSerializer(recommended_products, many=True, context={'request': request, 'is_detail': False})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 def get_recommended_products(user):
     search_history = SearchHistory.objects.filter(user=user)
     if not search_history.exists():
-        return Product.objects.order_by('?')[:10]  # Return 10 random products
+        return Product.objects.order_by('?')[:5]  # Return 10 random products
 
     keywords = search_history.values_list('keyword', flat=True)
     keyword_counter = Counter(keywords)

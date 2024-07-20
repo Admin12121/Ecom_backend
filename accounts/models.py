@@ -85,16 +85,6 @@ class User(AbstractBaseUser):
         return EmailAddress.objects.filter(user=self)
 
 
-class Notification(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
-    message = models.TextField(max_length=500, null=True, blank=True)
-    seen = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f'Notification for {self.user.email}'
-
-
 class SearchHistory(models.Model):
     user = models.ForeignKey(User, related_name='search_history', on_delete=models.CASCADE)
     keyword = models.CharField(max_length=255)

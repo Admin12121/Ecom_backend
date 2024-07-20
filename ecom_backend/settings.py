@@ -20,6 +20,8 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
+    'daphne',
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -36,6 +38,7 @@ INSTALLED_APPS = [
     'django_otp.plugins.otp_totp',
     # 'rest_framework_simplejwt.token_blacklist',
     #External
+    'notification',
     'accounts',
     'products',
     'sales',
@@ -80,7 +83,17 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "ecom_backend.wsgi.application"
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
+
+# WSGI_APPLICATION = "ecom_backend.wsgi.application"
+ASGI_APPLICATION = 'ecom_backend.asgi.application'
 
 DATABASES = {
     "default": {
