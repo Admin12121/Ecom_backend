@@ -32,5 +32,4 @@ class UserInfoInline(admin.StackedInline):
 
  # Now register the new UserModelAdmin...
 admin.site.register(User, UserModelAdmin)
-admin.site.register(Notification)
 admin.site.register(UserDevice)

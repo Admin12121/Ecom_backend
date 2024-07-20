@@ -40,7 +40,8 @@ class User(AbstractBaseUser):
     profile = models.ImageField(upload_to='profile/', null=True, blank=True, validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png'])])
     first_name = models.CharField(max_length=200, blank=True)
     last_name = models.CharField(max_length=200, blank=True)
-    phone = models.CharField(max_length=15, unique=True, blank=True)
+    username = models.CharField(max_length=200, blank=True, null=True)
+    phone = models.CharField(max_length=15, blank=True)
     dob = models.CharField(max_length=10, null=True, blank=True)
     gender = models.CharField(max_length=10, null=True, blank=True)
     otp_device = models.ForeignKey(TOTPDevice,related_name='otp_user', on_delete=models.SET_NULL, null=True, blank=True)
@@ -82,16 +83,6 @@ class User(AbstractBaseUser):
     @property
     def social_accounts(self):
         return EmailAddress.objects.filter(user=self)
-
-
-class Notification(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
-    message = models.TextField(max_length=500, null=True, blank=True)
-    seen = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f'Notification for {self.user.email}'
 
 
 class SearchHistory(models.Model):
