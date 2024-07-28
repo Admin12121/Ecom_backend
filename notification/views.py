@@ -2,8 +2,11 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.contrib.auth.models import User
 from .models import Notification
+from .serializers import NotificationSerializer
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from rest_framework import viewsets, permissions
+from rest_framework.permissions import IsAuthenticated , IsAuthenticatedOrReadOnly, AllowAny
 
 def send_notifications():
     notifications = Notification.objects.filter(sent=False, send_time__lte=timezone.now())
@@ -32,3 +35,8 @@ def send_notifications():
         
         notification.sent = True
         notification.save()
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    queryset = Notification.objects.all()
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]

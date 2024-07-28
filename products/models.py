@@ -3,6 +3,7 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from .utils import validate_image_format, compress_image, generate_slug , generate_unique_slug
+from accounts.models import User
 import os
 
 class Category(models.Model):
@@ -83,6 +84,16 @@ class ProductImage(models.Model):
 
     def __str__(self):
         return f"{self.product.product_name} Image"
+
+class NotifyUser(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='notify_user', null=True, blank=True)
+    variant = models.SmallIntegerField(null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    email = models.EmailField(null=True,blank=True)
+
+    def __str__(self):
+        return f"{self.product.product_name} {self.email}"
+
 
 class Review(models.Model):
     product = models.ForeignKey(Product, related_name='reviews', on_delete=models.CASCADE)

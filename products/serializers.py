@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply
+from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply, NotifyUser
 
 
 class SubcategorySerializer(serializers.ModelSerializer):
@@ -108,3 +108,8 @@ class CommentReplySerializer(serializers.ModelSerializer):
     class Meta:
         model = CommentReply
         fields = '__all__'
+
+class NotifyUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotifyUser
+        fields = '__all__'    

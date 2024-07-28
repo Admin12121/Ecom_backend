@@ -155,8 +155,8 @@ AUTH_USER_MODEL = 'accounts.User'
 JWT_SECRET = config('JWT_SECRET')
 # JWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=300),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=90),
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=10),
     'ROTATE_REFRESH_TOKENS' : True,
     'BLACKLIST_AFTER_ROTATION' : False,
     'UPDATE_LAST_LOGIN' : False,
@@ -196,17 +196,24 @@ SOCIALACCOUNT_PROVIDERS = {
         'SCOPE': [
             'profile',
             'email',
-            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/user.addresses.read',
+            'https://www.googleapis.com/auth/user.birthday.read',
             'https://www.googleapis.com/auth/user.gender.read',
-            'https://www.googleapis.com/auth/user.birthday.read'
+            'https://www.googleapis.com/auth/user.phonenumbers.read',
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/userinfo.email'
         ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        },        
         'FIELDS': [
             'email',
             'first_name',
             'last_name',
             'picture',
             'gender',
-            'birthdate'
+            'birthdate',
+            'phone'
         ],
     },
 }
