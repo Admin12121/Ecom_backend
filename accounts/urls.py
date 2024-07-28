@@ -1,12 +1,14 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, GoogleLogin
+from .views import UserViewSet, GoogleLogin, SiteViewLogViewSet, AdminUserViewSet
 from .otp_views import OTPViewSet 
 from rest_framework_simplejwt.views import TokenRefreshView
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'otp', OTPViewSet, basename='otp')  # add this line
+router.register(r'admin-users', AdminUserViewSet, basename='admin-users') 
+router.register(r'site-view-logs', SiteViewLogViewSet, basename='site-view-logs')
 
 urlpatterns = [
     path('', include(router.urls)),

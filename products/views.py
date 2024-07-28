@@ -2,11 +2,12 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply
+from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply, NotifyUser
 from .serializers import (CategorySerializer, SubcategorySerializer, ProductSerializer,
                           ProductVariantSerializer, ProductImageSerializer, ReviewSerializer, CommentSerializer,
-                          CommentReplySerializer)
-
+                          CommentReplySerializer, NotifyUserSerializer)
+from accounts.models import User
+from notification.models import Notification
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -260,6 +261,20 @@ class ProductViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(queryset, many=True, context={'request': request, 'is_detail': False})
             return Response(serializer.data)
 
+def get_recommended_products(self, user):
+    search_history = SearchHistory.objects.filter(user=user).values_list('keyword', flat=True)
+    if not search_history:
+        return Product.objects.order_by('?')[:5]  # Return 5 random products
+
+    keyword_counter = Counter(search_history)
+    most_searched_keywords = [keyword for keyword, _ in keyword_counter.most_common(3)]
+    query = Q()
+    for keyword in most_searched_keywords:
+        query |= Q(product_name__icontains=keyword)
+
+    recommended_products = Product.objects.filter(query).distinct()[:10]
+    return recommended_products
+
 class TrendingView(APIView):
     def get(self, request, format=None):
         past_week = timezone.now() - timezone.timedelta(days=7)
@@ -281,29 +296,47 @@ class TrendingView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class RecommendationView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request, format=None):
-        user = request.user
-        recommended_products = get_recommended_products(user)
+        if request.user.is_authenticated:
+            user = request.user
+            recommended_products = self.get_recommended_products(user)
+        else:
+            product_id = request.query_params.get('product_id')
+            if product_id:
+                recommended_products = self.get_similar_products(product_id)
+                if isinstance(recommended_products, Response):
+                    return recommended_products
+            else:
+                return Response({"detail": "Product ID is required for unauthenticated users."}, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = ProductSerializer(recommended_products, many=True, context={'request': request, 'is_detail': False})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-def get_recommended_products(user):
-    search_history = SearchHistory.objects.filter(user=user)
-    if not search_history.exists():
-        return Product.objects.order_by('?')[:5]  # Return 10 random products
+    def get_similar_products(self, product_id):
+        try:
+            product = Product.objects.get(id=product_id)
+        except Product.DoesNotExist:
+            return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    keywords = search_history.values_list('keyword', flat=True)
-    keyword_counter = Counter(keywords)
-    most_searched_keywords = [keyword for keyword, _ in keyword_counter.most_common(3)]
-    recommended_products = Product.objects.filter(
-        Q(product_name__icontains=most_searched_keywords[0]) |
-        Q(product_name__icontains=most_searched_keywords[1]) |
-        Q(product_name__icontains=most_searched_keywords[2])
-    ).distinct()
+        similar_products = Product.objects.filter(category=product.category).exclude(id=product_id)[:10]
+        return similar_products
 
-    return recommended_products
+    def get_recommended_products(self, user):
+        search_history = SearchHistory.objects.filter(user=user).values_list('keyword', flat=True)
+        if not search_history:
+            return Product.objects.order_by('?')[:5]  # Return 5 random products
+
+        keyword_counter = Counter(search_history)
+        most_searched_keywords = [keyword for keyword, _ in keyword_counter.most_common(3)]
+        query = Q()
+        for keyword in most_searched_keywords:
+            query |= Q(product_name__icontains=keyword)
+
+        recommended_products = Product.objects.filter(query).distinct()[:10]
+        return recommended_products
+
 
 class ProductVariantViewSet(viewsets.ModelViewSet):
     queryset = ProductVariant.objects.select_related('product').all()
@@ -330,3 +363,81 @@ class CommentReplyViewSet(viewsets.ModelViewSet):
     serializer_class = CommentReplySerializer
     permission_classes = [permissions.IsAuthenticated]
 
+class NotifyUserViewSet(viewsets.ModelViewSet):
+    queryset = NotifyUser.objects.select_related('product', 'user').all()
+    serializer_class = NotifyUserSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        product_id = self.request.query_params.get('product_id')
+        variant = self.request.query_params.get('variant')
+
+        if product_id:
+            queryset = queryset.filter(product_id=product_id)
+        if variant:
+            queryset = queryset.filter(variant=variant)
+
+        return queryset
+    
+    def create(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        product = get_object_or_404(Product, id=request.data.get('product'))
+        variant = request.data.get('variant')
+        user = request.user if request.user.is_authenticated else None
+
+        notify_user = NotifyUser.objects.create(
+            product=product,
+            variant=variant,
+            user=user,
+            email=email
+        )
+
+        self.create_notifications(user, product, email)
+
+        serializer = self.get_serializer(notify_user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    def create_notifications(self, user, product, email):
+        # Create notification for the user who posted
+        if user:
+            Notification.objects.create(
+                user=user,
+                title="Thank you For Your Intrest",
+                message=f"We will nofify you as {product.product_name} get restock in the Store by {email}.",
+                type="product_requested"
+            )
+            user_identifier = user.first_name
+        else:
+            user_identifier = email
+
+        # Create notifications for all users with role 'admin' or 'staff'
+        admin_staff_users = User.objects.filter(role__in=['admin', 'staff','Admin','Staff'])
+        for admin_user in admin_staff_users:
+            Notification.objects.create(
+                user=admin_user,
+                title=f"Product Requested {product.product_name}",
+                message=f"{product.product_name} is been requested by user {user_identifier}",
+                type="product_requested"
+            )
+
+    def list(self, request, *args, **kwargs):
+        product_id = request.query_params.get('product')
+        variant = request.query_params.get('variant')
+        user = request.user if request.user.is_authenticated else None
+
+        if product_id and variant:
+            if user:
+                queryset = get_object_or_404(self.queryset, product_id=product_id, variant=variant, user=user)
+                return Response({"requested": True})
+            else:
+                return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        queryset = self.queryset
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)

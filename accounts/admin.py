@@ -9,8 +9,8 @@ class UserModelAdmin(BaseUserAdmin):
    list_filter = ('is_admin',)
    fieldsets = (
        ('User Credentials', {'fields': ('email', 'password')}),
-       ('Personal info', {'fields': ('profile','first_name','last_name','phone','dob','gender', 'otp_device','created_at','last_login','tc')}),
-       ('Permissions', {'fields': ('is_otp_verified','is_active','is_admin',)}),
+       ('Personal info', {'fields': ('profile','username','first_name','last_name','phone','dob','gender','social', 'otp_device','created_at','last_login','tc')}),
+       ('Permissions', {'fields': ('role','is_otp_verified','is_blocked','is_active','is_admin',)}),
    )
    # add_fieldsets is not a standard ModelAdmin attribute. UserModelAdmin
    # overrides get_fieldsets to use this attribute when creating a user.
@@ -33,3 +33,4 @@ class UserInfoInline(admin.StackedInline):
  # Now register the new UserModelAdmin...
 admin.site.register(User, UserModelAdmin)
 admin.site.register(UserDevice)
+admin.site.register(SiteViewLog)

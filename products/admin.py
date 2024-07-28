@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, ReviewImage, Comment, CommentReply
+from .models import NotifyUser, Category, Subcategory, Product, ProductVariant, ProductImage, Review, ReviewImage, Comment, CommentReply
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -43,3 +43,8 @@ class CommentAdmin(admin.ModelAdmin):
 @admin.register(CommentReply)
 class CommentReplyAdmin(admin.ModelAdmin):
     list_display = ('comment', 'user', 'content', 'created_at')
+
+
+@admin.register(NotifyUser)
+class NotifyUserAdmin(admin.ModelAdmin):
+    list_display = ('product', 'user','email', 'variant')
