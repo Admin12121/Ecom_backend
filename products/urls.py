@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CategoryViewSet, SubcategoryViewSet, ProductViewSet, ProductVariantViewSet,
     ProductImageViewSet, ReviewViewSet, CommentViewSet, CommentReplyViewSet,
-    TrendingView, RecommendationView,CategoryView, NotifyUserViewSet
+    TrendingView, RecommendationView, NotifyUserViewSet, AddToCartViewSet
     )
 
 router = DefaultRouter()
@@ -16,10 +16,10 @@ router.register(r'reviews', ReviewViewSet)
 router.register(r'comments', CommentViewSet)
 router.register(r'comment-replies', CommentReplyViewSet)
 router.register(r'notifyuser', NotifyUserViewSet)
+router.register(r'cart', AddToCartViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('post/', CategoryView.as_view(), name='post'),
     path('trending/', TrendingView.as_view(), name='trending'),
     path('recommendations/', RecommendationView.as_view(), name='recommendations'),
 ]

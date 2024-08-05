@@ -2,10 +2,10 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply, NotifyUser
+from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply, NotifyUser, AddtoCart
 from .serializers import (CategorySerializer, SubcategorySerializer, ProductSerializer,
                           ProductVariantSerializer, ProductImageSerializer, ReviewSerializer, CommentSerializer,
-                          CommentReplySerializer, NotifyUserSerializer)
+                          CommentReplySerializer, NotifyUserSerializer, AddtoCartSerializer)
 from accounts.models import User
 from notification.models import Notification
 from rest_framework import viewsets, permissions, status
@@ -42,11 +42,6 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         return request.user.is_staff
-
-class CategoryView(APIView):
-     def post(self, request, format=None):
-        #    print(request.data)
-           return Response({"Successfull"}, status=status.HTTP_200_OK)
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -300,8 +295,9 @@ class RecommendationView(APIView):
 
     def get(self, request, format=None):
         if request.user.is_authenticated:
+            product_id = request.query_params.get('product_id')
             user = request.user
-            recommended_products = self.get_recommended_products(user)
+            recommended_products = self.get_recommended_products(user, product_id)
         else:
             product_id = request.query_params.get('product_id')
             if product_id:
@@ -323,8 +319,9 @@ class RecommendationView(APIView):
         similar_products = Product.objects.filter(category=product.category).exclude(id=product_id)[:10]
         return similar_products
 
-    def get_recommended_products(self, user):
+    def get_recommended_products(self, user, product_id=None):
         search_history = SearchHistory.objects.filter(user=user).values_list('keyword', flat=True)
+            
         if not search_history:
             return Product.objects.order_by('?')[:5]  # Return 5 random products
 
@@ -334,8 +331,10 @@ class RecommendationView(APIView):
         for keyword in most_searched_keywords:
             query |= Q(product_name__icontains=keyword)
 
-        recommended_products = Product.objects.filter(query).distinct()[:10]
-        return recommended_products
+        recommended_products = Product.objects.filter(query).distinct()
+        if product_id:
+            recommended_products = recommended_products.exclude(id=product_id)
+        return recommended_products[:10]
 
 
 class ProductVariantViewSet(viewsets.ModelViewSet):
@@ -441,3 +440,57 @@ class NotifyUserViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+    
+class AddToCartViewSet(viewsets.ModelViewSet):
+    queryset = AddtoCart.objects.all()
+    serializer_class = AddtoCartSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = get_object_or_404(User, email = self.request.user)
+        print(self.queryset.filter(user=user))
+        return self.queryset.filter(user=user)
+
+
+    def create(self, request, *args, **kwargs):
+        items = request.data.get('items', [])
+        user = request.user
+        cart_items = []
+        
+        for item in items:
+            product = get_object_or_404(Product, id=item['id'])
+            variant = get_object_or_404(ProductVariant, id=item['variantId'])
+            existing_cart_item = AddtoCart.objects.filter(user=user, product=product, variant=variant)
+            if existing_cart_item.exists():
+                existing_cart_item.delete()
+            cart_item = AddtoCart(user=user, product=product, variant=variant)
+            cart_items.append(cart_item)
+
+        AddtoCart.objects.bulk_create(cart_items)
+
+        return Response({'msg': 'Added to Cart'}, status=status.HTTP_201_CREATED)
+    
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response({'msg': 'Cart Updated'}, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        user = request.user
+        product_id =  kwargs.get('pk')
+
+        if not product_id:
+            return Response({'error': 'Product ID not provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            cart_item = AddtoCart.objects.get(user=user, product_id=product_id)
+            cart_item.delete()
+            return Response({'msg': 'Item removed from cart'}, status=status.HTTP_200_OK)
+        except AddtoCart.DoesNotExist:
+            return Response({'error': 'Item not found in cart'}, status=status.HTTP_404_NOT_FOUND)

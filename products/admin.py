@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import NotifyUser, Category, Subcategory, Product, ProductVariant, ProductImage, Review, ReviewImage, Comment, CommentReply
+from .models import AddtoCart, NotifyUser, Category, Subcategory, Product, ProductVariant, ProductImage, Review, ReviewImage, Comment, CommentReply
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -48,3 +48,8 @@ class CommentReplyAdmin(admin.ModelAdmin):
 @admin.register(NotifyUser)
 class NotifyUserAdmin(admin.ModelAdmin):
     list_display = ('product', 'user','email', 'variant')
+
+
+@admin.register(AddtoCart)
+class AddtoCartAdmin(admin.ModelAdmin):
+    list_display = ('user', 'product','variant')

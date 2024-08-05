@@ -33,16 +33,6 @@ def update_status(sender, instance, **kwargs):
         instance.status = True
 
 
-class Add_to_Cart(models.Model):
-    user = models.ForeignKey(User, on_delete=models.SET_DEFAULT, default=None, related_name='cart_user')  # Unique related_name
-    product = models.ForeignKey(Product, on_delete=models.SET_DEFAULT, null=True, default=None)
-    qty = models.FloatField()
-    costumer_name = models.ForeignKey(User, on_delete=models.SET_DEFAULT, default=None, related_name='cart_costumer_name')  # Unique related_name
-
-    def __str__(self):
-        return f"{self.product}"
-
-
 class Sales(models.Model):
     costumer_name = models.ForeignKey(User, on_delete=models.SET_DEFAULT, default=None)
     transactionuid = models.IntegerField(null=True, blank=True)

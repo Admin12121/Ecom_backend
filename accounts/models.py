@@ -114,7 +114,7 @@ class DeliveryAddress(models.Model):
 
 
 class SearchHistory(models.Model):
-    user = models.ForeignKey(User, related_name='search_history', on_delete=models.CASCADE)
+    user = models.ForeignKey(User, related_name='search_history', on_delete=models.CASCADE, null=True, blank=True)
     keyword = models.CharField(max_length=255)
     search_date = models.DateTimeField(default=timezone.now)
 

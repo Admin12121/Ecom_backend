@@ -19,4 +19,4 @@ class SalesAdmin(admin.ModelAdmin):
 admin.site.register(Sales,SalesAdmin)
 admin.site.register(Saled_Products)
 admin.site.register(Redeem_Code, Redeem_CodeAdmin)
-admin.site.register(Add_to_Cart)
+

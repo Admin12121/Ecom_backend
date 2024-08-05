@@ -1,15 +1,15 @@
 from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from django.contrib.auth import authenticate
-from .models import User, UserDevice, SiteViewLog
+from .models import User, UserDevice, SiteViewLog, SearchHistory
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserDataSerializer,
     UserChangePasswordSerializer, SendUserPasswordResetEmailSerializer,
     UserPasswordResetSerializer, AdminUserDataSerializer, UserDeviceSerializer, 
     CustomSocialLoginSerializer, SiteViewLogSerializer, BulkUserActionSerializer,
-    DeliveryAddressSerializer, SearchHistorySerializer
+    DeliveryAddressSerializer, SearchHistorySerializer, UserDetailSerializer
 )
 from .renderers import UserRenderer
 from .tokens import generate_token
@@ -136,6 +136,12 @@ class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.Retri
             self.permission_classes = [IsAuthenticated, IsAdminUser]
         return super(UserViewSet, self).get_permissions()
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        user = request.user
+
+        serializer = UserDetailSerializer(user, context = {'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -161,7 +167,6 @@ class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.Retri
         return Response({
             'message': 'Registration successful! Please verify your email to activate your account.',
         }, status=status.HTTP_201_CREATED)
-
 
     @action(detail=False, methods=['post'])
     def login(self, request):
@@ -306,7 +311,7 @@ class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.Retri
     
 
 class AdminUserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
+    queryset = User.objects.all().order_by('-created_at')
     serializer_class = AdminUserDataSerializer
     renderer_classes = [UserRenderer]
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -316,9 +321,22 @@ class AdminUserViewSet(viewsets.ModelViewSet):
     ordering_fields = ['email', 'first_name', 'last_name']
     pagination_class = CustomPagination
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        exclude_data = self.request.query_params.get('exclude_by', '')
+        exclude_data = exclude_data.split(',')
+        if 'active' in exclude_data:
+            queryset = queryset.exclude(is_active=True)
+        if 'blocked' in exclude_data:
+            queryset = queryset.exclude(is_blocked=True)
+        if 'inactive' in exclude_data:
+            queryset = queryset.exclude(is_active=False)
+        return queryset
+
+
     @action(detail=False, methods=['get'])
     def list_users(self, request):
-        queryset = self.filter_queryset(self.queryset)
+        queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -551,3 +569,24 @@ class SiteViewLogAnalyticsView(View):
         }
 
         return JsonResponse(response_data, safe=False)    
+
+class SearchView(viewsets.ModelViewSet):
+    queryset = SearchHistory.objects.all().order_by('-search_date')
+    serializer_class = SearchHistorySerializer
+    renderer_classes = [UserRenderer]
+    permission_classes = [AllowAny]
+    pagination_class = CustomPagination        
+
+    def create(self, request, *args, **kwargs):
+        keyword = request.data.get('keyword')
+        user = request.user if request.user.is_authenticated else None
+        if not keyword:
+            return Response({'error': 'Keyword is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        search_history = SearchHistory.objects.create(
+            user=user,
+            keyword=keyword,
+        )
+
+        serializer = self.get_serializer(search_history)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

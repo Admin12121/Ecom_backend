@@ -7,12 +7,6 @@ class RedeemSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class AddtoCartSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Add_to_Cart
-        fields = "__all__"
-
-
 class Saled_ProductsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Saled_Products
