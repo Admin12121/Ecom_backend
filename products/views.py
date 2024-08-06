@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply, NotifyUser, AddtoCart
 from .serializers import (CategorySerializer, SubcategorySerializer, ProductSerializer,
                           ProductVariantSerializer, ProductImageSerializer, ReviewSerializer, CommentSerializer,
-                          CommentReplySerializer, NotifyUserSerializer, AddtoCartSerializer)
+                          CommentReplySerializer, NotifyUserSerializer, AddtoCartSerializer, CategoryViewSerializer)
 from accounts.models import User
 from notification.models import Notification
 from rest_framework import viewsets, permissions, status
@@ -46,8 +46,11 @@ class IsAdminOrReadOnly(permissions.BasePermission):
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.prefetch_related('subcategory_set').all()
-    serializer_class = CategorySerializer
     permission_classes = [IsAdminOrReadOnly]
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return CategoryViewSerializer
+        return CategorySerializer    
 
 
 class SubcategoryViewSet(viewsets.ModelViewSet):

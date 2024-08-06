@@ -2,6 +2,12 @@ from rest_framework import serializers
 from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply, NotifyUser, AddtoCart
 
 
+class CategoryViewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ['id', 'name', 'categoryslug', 'image']
+
+
 class SubcategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Subcategory
@@ -9,7 +15,6 @@ class SubcategorySerializer(serializers.ModelSerializer):
 
 class CategorySerializer(serializers.ModelSerializer):
     subcategories = SubcategorySerializer(many=True, read_only=True, source='subcategory_set') 
-
     class Meta:
         model = Category
         fields = ['id', 'name', 'categoryslug', 'subcategories']
