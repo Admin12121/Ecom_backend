@@ -17,5 +17,5 @@ class LayoutSerializer(serializers.ModelSerializer):
     layout_sections = LayoutSectionSerializer(many=True, read_only=True)
     class Meta:
         model = Layout
-        fields = ['name', 'non_deletable', 'active']
+        fields = ['name', 'layout_slug' ,'non_deletable', 'active', 'layout_sections']
 

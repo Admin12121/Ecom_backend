@@ -9,8 +9,11 @@ class LayoutViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         layout_data = request.data
-        layout_sections_data = layout_data.pop('layout_sections', [])
 
+        if layout_data.get('active', False):
+            Layout.objects.filter(active=True).update(active=False)
+
+        layout_sections_data = layout_data.pop('layout_sections', [])
         layout = Layout.objects.create(**layout_data)
 
         for section_data in layout_sections_data:
@@ -26,8 +29,11 @@ class LayoutViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         layout = self.get_object()
         layout_data = request.data
-        layout_sections_data = layout_data.pop('layout_sections', [])
 
+        if layout_data.get('active', False):
+            Layout.objects.filter(active=True).exclude(pk=layout.pk).update(active=False)
+
+        layout_sections_data = layout_data.pop('layout_sections', [])
         for attr, value in layout_data.items():
             setattr(layout, attr, value)
         layout.save()
