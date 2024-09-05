@@ -16,10 +16,10 @@ class ImageSerializer(serializers.ModelSerializer):
     titles = TitleSerializer(many=True, read_only=True, source='title_set')
     class Meta:
         model = Image
-        fields = ['image_id', 'image', 'links', 'titles', 'link_no', 'title_no']
+        fields = ['id','image_id', 'image', 'links', 'titles', 'link_no', 'title_no']
 
 class LayoutSerializer(serializers.ModelSerializer):
     images = ImageSerializer(many=True, read_only=True, source='image_set')
     class Meta:
         model = Layout
-        fields = ['name', 'layout_slug', 'non_deletable', 'active', 'images', 'no_image']
+        fields = ['id','name', 'layout_slug', 'non_deletable', 'active', 'images', 'no_image']
