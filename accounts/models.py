@@ -119,7 +119,7 @@ class SearchHistory(models.Model):
     search_date = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
-        return f'{self.user.email} - {self.keyword}'
+        return f'{self.user.email if self.user else "No User"} - {self.keyword}'
 
     def save(self, *args, **kwargs):
         user_search_history = SearchHistory.objects.filter(user=self.user)
@@ -138,7 +138,7 @@ class UserDevice(models.Model):
     signature = models.CharField(max_length=200,null=True, unique=True)
 
     def __str__(self):
-        return f'{self.user.email} - {self.device_type} ({self.device_os})'
+        return f'{self.user.email if self.user else "No User"} - {self.device_type} ({self.device_os})'
 
 class SiteViewLog(models.Model):
     user = models.ForeignKey(User,related_name='site_view_logs', null=True, blank=True, on_delete=models.SET_NULL)

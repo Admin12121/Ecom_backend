@@ -34,3 +34,4 @@ class UserInfoInline(admin.StackedInline):
 admin.site.register(User, UserModelAdmin)
 admin.site.register(UserDevice)
 admin.site.register(SiteViewLog)
+admin.site.register(SearchHistory)

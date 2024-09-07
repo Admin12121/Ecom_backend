@@ -282,6 +282,12 @@ class TrendingView(APIView):
             count=Count('keyword')
         ).order_by('-count')[:5]
 
+        if not trending_keywords:
+            # Fallback to all-time search if past week's search yields no results
+            trending_keywords = SearchHistory.objects.values('keyword').annotate(
+                count=Count('keyword')
+            ).order_by('-count')[:5]
+
         if trending_keywords:
             keyword = trending_keywords[0]['keyword']
             trending_products = Product.objects.filter(
@@ -290,9 +296,12 @@ class TrendingView(APIView):
         else:
             trending_products = Product.objects.none()
 
-        serializer = ProductSerializer(trending_products, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        # If no trending products found, fallback to latest created products
+        if not trending_products.exists():
+            trending_products = Product.objects.order_by('-id')[:4]
 
+        serializer = ProductSerializer(trending_products, many=True, context={'request': request, 'is_detail': False})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 class RecommendationView(APIView):
     permission_classes = [permissions.AllowAny]
 
