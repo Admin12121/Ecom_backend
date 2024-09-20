@@ -2,10 +2,10 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply, NotifyUser, AddtoCart
+from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply, NotifyUser, AddtoCart, ReviewImage
 from .serializers import (CategorySerializer, SubcategorySerializer, ProductSerializer,
-                          ProductVariantSerializer, ProductImageSerializer, ReviewSerializer, CommentSerializer,
-                          CommentReplySerializer, NotifyUserSerializer, AddtoCartSerializer, CategoryViewSerializer)
+                          ProductVariantSerializer, ProductImageSerializer, ReviewSerializer,ReviewWriteSerializer, CommentSerializer,
+                          CommentReplySerializer, NotifyUserSerializer, AddtoCartSerializer, CategoryViewSerializer, ReviewImageSerializer, ReviewImageWriteSerializer)
 from accounts.models import User
 from notification.models import Notification
 from rest_framework import viewsets, permissions, status
@@ -359,10 +359,91 @@ class ProductImageViewSet(viewsets.ModelViewSet):
     serializer_class = ProductImageSerializer
     permission_classes = [IsAdminOrReadOnly]
 
-class ReviewViewSet(viewsets.ModelViewSet):
-    queryset = Review.objects.select_related('product', 'user').all()
-    serializer_class = ReviewSerializer
+class ReviewPostViewSet(viewsets.ModelViewSet):
+    queryset = Review.objects.select_related('product', 'user').all().order_by('-id')
+    serializer_class = ReviewWriteSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        data['user'] = request.user.id
+        data['product']  = Product.objects.get(productslug=data.get('product_slug')).id
+        serializer = self.get_serializer(data=data)
+        if serializer.is_valid(raise_exception=True):
+            with transaction.atomic():
+                self.perform_create(serializer)
+                image = request.FILES.get('image')
+                if image:
+                    try:
+                        data = {'review': serializer.data['id'], 'image': image}
+                        image_serializer = ReviewImageWriteSerializer(data=data)
+                        image_serializer.is_valid(raise_exception=True)
+                        image_serializer.save()
+                    except Exception as e:
+                        transaction.set_rollback(True)
+                        raise e
+        return Response({"msg": "Review Posted Successfully"}, status=status.HTTP_201_CREATED)
+    
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        data = request.data
+        if request.user.id != instance.user.id and request.user.role != 'Admin' and request.user.role != 'Staff':
+            return Response({"detail": "You are not authorized to update this review data."}, status=status.HTTP_403_FORBIDDEN)
+        serializer = self.get_serializer(instance, data=data)
+        if serializer.is_valid(raise_exception=True):
+            with transaction.atomic():
+                self.perform_update(serializer)
+                image = request.FILES.get('image')
+                if image:
+                    try:
+                        review_image = ReviewImageWriteSerializer(review=instance, image=image)
+                        review_image.save()
+                    except Exception as e:
+                        transaction.set_rollback(True)
+                        raise e
+        return Response({"msg": "Review Updated Successfully"}, status=status.HTTP_200_OK)
+                        
+
+class ReviewViewSet(viewsets.ModelViewSet):
+    queryset = Review.objects.select_related('product', 'user').all().order_by('-id')
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self, *args, **kwargs):
+        queryset = super().get_queryset()
+        product_slug = self.kwargs.get('product_slug')
+        star = self.request.query_params.get('star')
+        filter = self.request.query_params.get('filter')
+        if product_slug:
+            queryset = queryset.filter(product__productslug=product_slug)
+        if self.request.user.is_authenticated:
+            request_user = self.request.user
+            if request_user.role != 'Admin' and request_user.role != 'Staff' and not request_user.is_superuser and not product_slug:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied({"detail": "You are not authorized to view reviews"})
+        if star and star != '0':
+            queryset = queryset.filter(rating=star)
+        
+        if filter == 'recent':
+            queryset = queryset.order_by('-created_at')
+        elif filter == 'rating':
+            queryset = queryset.order_by('-rating')
+        elif filter == 'relevant':
+            # Implement your logic for relevance sorting if needed
+            pass        
+        return queryset
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.select_related('product', 'user').all()

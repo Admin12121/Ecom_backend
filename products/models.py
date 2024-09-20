@@ -45,6 +45,15 @@ class Product(models.Model):
             models.Index(fields=['subcategory']),
         ]
 
+    def get_average_rating(self):
+        reviews = self.reviews.all()
+        if reviews.exists():
+            return reviews.aggregate(models.Avg('rating'))['rating__avg']
+        return None
+
+    def get_total_ratings(self):
+        return self.reviews.count()
+
     def __str__(self):
         return self.product_name
 
@@ -98,10 +107,12 @@ class NotifyUser(models.Model):
 
 class Review(models.Model):
     product = models.ForeignKey(Product, related_name='reviews', on_delete=models.CASCADE)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
     title = models.CharField(max_length=255)
     content = models.TextField()
+    recommended = models.BooleanField(default=True)
+    delivery = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -145,6 +156,7 @@ class AddtoCart(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='cart_user')  # Unique related_name
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, related_name='cart_product')
     variant = models.ForeignKey(ProductVariant, on_delete=models.SET_DEFAULT, null=True, default=None, related_name='cart_product_variant')
+    pcs = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.product}"
