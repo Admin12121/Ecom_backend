@@ -153,10 +153,13 @@ class CommentReply(models.Model):
         return f'{self.user.email} - Reply to {self.comment.id}'
 
 class AddtoCart(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='cart_user')  # Unique related_name
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='cart_user')
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, related_name='cart_product')
     variant = models.ForeignKey(ProductVariant, on_delete=models.SET_DEFAULT, null=True, default=None, related_name='cart_product_variant')
     pcs = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.product}"
+
+    class Meta:
+        unique_together = ('user', 'variant')

@@ -24,4 +24,5 @@ urlpatterns = [
     path('trending/', TrendingView.as_view(), name='trending'),
     path("reviews/", ReviewViewSet.as_view({'get': 'list'}), name='admin-reviews'),
     path('recommendations/', RecommendationView.as_view(), name='recommendations'),
+    path('get_products_by_ids/', ProductViewSet.as_view({'get': 'get_products_by_ids'}), name='get-products-by-ids'), 
 ]

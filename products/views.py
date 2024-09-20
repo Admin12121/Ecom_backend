@@ -217,6 +217,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         ids = request.query_params.get('ids', None)
         if ids:
             ids_list = ids.split(',')
+            print(ids_list)
             queryset = self.queryset.filter(id__in=ids_list)
             
             page = self.paginate_queryset(queryset)
@@ -553,10 +554,11 @@ class AddToCartViewSet(viewsets.ModelViewSet):
         for item in items:
             product = get_object_or_404(Product, id=item['id'])
             variant = get_object_or_404(ProductVariant, id=item['variantId'])
+            pcs = item['pcs']
             existing_cart_item = AddtoCart.objects.filter(user=user, product=product, variant=variant)
             if existing_cart_item.exists():
                 existing_cart_item.delete()
-            cart_item = AddtoCart(user=user, product=product, variant=variant)
+            cart_item = AddtoCart(user=user, product=product, variant=variant, pcs=pcs)
             cart_items.append(cart_item)
 
         AddtoCart.objects.bulk_create(cart_items)
