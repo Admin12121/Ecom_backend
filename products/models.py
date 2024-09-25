@@ -158,6 +158,11 @@ class AddtoCart(models.Model):
     variant = models.ForeignKey(ProductVariant, on_delete=models.SET_DEFAULT, null=True, default=None, related_name='cart_product_variant')
     pcs = models.IntegerField(null=True, blank=True)
 
+    def save(self, *args, **kwargs):
+        if self.pcs > self.variant.stock:
+            raise ValidationError('Not enough stock available')
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.product}"
 

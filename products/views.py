@@ -573,6 +573,8 @@ class AddToCartViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
+        if serializer.validated_data['pcs'] > instance.variant.stock:
+            return Response({'error': 'Not enough stock available'}, status=status.HTTP_400_BAD_REQUEST)
         self.perform_update(serializer)
         return Response({'msg': 'Cart Updated'}, status=status.HTTP_200_OK)
 

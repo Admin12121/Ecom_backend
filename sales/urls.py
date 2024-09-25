@@ -1,8 +1,11 @@
-from django.urls import path
-from .views import *
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import SalesViewSet, RedeemCodeViewSet
 
+router = DefaultRouter()
+router.register(r'sales', SalesViewSet, basename='sales')
+router.register(r'redeemcode', RedeemCodeViewSet, basename='redeem-code')
 
 urlpatterns = [
-    path('sales/', SalesDataView.as_view(), name='sales'),
-    path('redeemcode/', Redeem_CodeView.as_view(), name='redeem-code'),
+    path('', include(router.urls)),
 ]
