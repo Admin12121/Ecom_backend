@@ -1,6 +1,6 @@
 from django.db import models
 from accounts.models import User
-from products.models import Product
+from products.models import Product, ProductVariant
 from django.utils import timezone
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
@@ -9,28 +9,16 @@ from django.dispatch import receiver
 class Redeem_Code(models.Model):
    name = models.CharField(max_length=100, null=True, blank=True)
    code = models.CharField(max_length=100,unique=True,null=True, blank=True)
-   type = models.BooleanField(null=True, blank=True)
-   minimum = models.IntegerField(null=True, blank=True)
+   type = models.CharField(max_length=10, choices=[('amount', 'Amount'), ('percentage', 'Percentage')], null=True, blank=True)
    discount = models.IntegerField(null=True, blank=True)
+   minimum = models.IntegerField(null=True, blank=True)
    limit = models.IntegerField(null=True, blank=True)
-   maxamt = models.IntegerField(null=True, blank=True)
    used = models.IntegerField(null=True, blank=True)
-   valid = models.DateField(null=True, blank=True)
-   status = models.BooleanField(null=True, blank=True)
+   valid_until = models.DateField(null=True, blank=True)
+   is_active = models.BooleanField(null=True, blank=True)
 
    def __str__(self):
       return self.name
-   
-@receiver(pre_save, sender=Redeem_Code)
-def update_status(sender, instance, **kwargs):
-    # Check if the code is still valid (valid date is after the current date)
-    if instance.valid < timezone.now().date():
-        instance.status = False
-    # Check if the code has reached its usage limit
-    elif instance.used >= instance.limit:
-        instance.status = False
-    else:
-        instance.status = True
 
 
 class Sales(models.Model):
@@ -39,7 +27,18 @@ class Sales(models.Model):
     sub_total = models.FloatField()
     shipping = models.FloatField(null=True,blank=True)
     discount = models.FloatField(null=True, blank=True)
-    status = models.BooleanField(null=True,blank=True)
+    status = models.CharField(
+        max_length=10,
+        choices=[
+            ('pending', 'Pending'),
+            ('verified', 'Verified'),
+            ('proceed', 'Proceed'),
+            ('packed', 'Packed'),
+            ('delivered', 'Delivered'),
+            ('successful', 'Successful'),
+        ],
+        default='pending',
+    )
     total_amt = models.FloatField()
     payment_method = models.CharField(max_length=100,null=True,blank=True)
     redeemCode= models.ForeignKey(Redeem_Code,on_delete=models.SET_DEFAULT, default=None, null=True, blank=True)
@@ -55,6 +54,7 @@ class Sales(models.Model):
 class Saled_Products(models.Model): 
    transition = models.ForeignKey(Sales, on_delete=models.CASCADE, null=True, blank=True,related_name='products')
    product = models.ForeignKey(Product, on_delete=models.SET_DEFAULT, null=True, default=None)
+   variant = models.ForeignKey(ProductVariant,on_delete=models.SET_DEFAULT,null=True, default=None)
    product_name = models.CharField(max_length=100, null=True, blank=True)
    price = models.FloatField()
    qty = models.FloatField()

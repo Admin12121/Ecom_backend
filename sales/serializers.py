@@ -15,7 +15,7 @@ class Saled_ProductsSerializer(serializers.ModelSerializer):
 
 class SalesDataSerializer(serializers.ModelSerializer):
     products = Saled_ProductsSerializer(many=True, read_only=True)
-    costumer_name = serializers.SlugRelatedField(read_only=True, slug_field='name')
+    costumer_name = serializers.SlugRelatedField(read_only=True, slug_field='username')
     class Meta:
         model = Sales
         fields = "__all__"

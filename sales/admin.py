@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import *
 # Register your models here.
 class Redeem_CodeAdmin(admin.ModelAdmin):
-    list_display = ('name' ,'code' , 'discount', 'limit', 'used', 'status')
+    list_display = ('name' ,'code' , 'discount', 'limit', 'used', 'is_active')
     search_fields = ('name', 'code')
 
 class Saled_ProdInline(admin.TabularInline):
