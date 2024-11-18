@@ -2,17 +2,15 @@ from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
-from django.contrib.auth import authenticate
-from .models import User, UserDevice, SiteViewLog, SearchHistory
+from .models import User, Account, UserDevice, SiteViewLog, SearchHistory
 from .serializers import (
-    UserRegistrationSerializer, UserLoginSerializer, UserDataSerializer,
-    UserChangePasswordSerializer, SendUserPasswordResetEmailSerializer,
-    UserPasswordResetSerializer, AdminUserDataSerializer, UserDeviceSerializer, 
-    CustomSocialLoginSerializer, SiteViewLogSerializer, BulkUserActionSerializer,
+    UserRegistrationSerializer, UserLoginSerializer, UserDataSerializer,  AdminUserDataSerializer, UserDeviceSerializer, 
+    SiteViewLogSerializer, BulkUserActionSerializer,
     DeliveryAddressSerializer, SearchHistorySerializer, UserDetailSerializer
 )
 from .renderers import UserRenderer
 from .tokens import generate_token
+from django.core.files.base import ContentFile
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import EmailMessage
@@ -20,15 +18,9 @@ from django.template.loader import render_to_string
 from django.db import transaction, IntegrityError
 from rest_framework_simplejwt.tokens import RefreshToken
 from decouple import config
-from django_otp.plugins.otp_totp.models import TOTPDevice
-from django_otp.util import random_hex
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
-from django_otp.oath import TOTP
-from allauth.socialaccount.models import SocialAccount
-from dj_rest_auth.registration.views import SocialLoginView
-from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, TruncYear
 from django.http import JsonResponse
 from datetime import datetime
@@ -36,12 +28,15 @@ from django.views import View
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.views import APIView
+from .otp_utils import generate_otp, send_otp_email, is_otp_valid 
+from django.utils import timezone
+
 import requests 
-from rest_framework import serializers
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
-    refresh['is_admin'] = user.is_admin
+    refresh['role'] = user.role
     return {
         'refresh': str(refresh),
         'access': str(refresh.access_token),
@@ -64,73 +59,10 @@ class CustomPagination(PageNumberPagination):
             'results': data
         })
 
-class GoogleLogin(SocialLoginView):
-    adapter_class = GoogleOAuth2Adapter
-    serializer_class = CustomSocialLoginSerializer
-
-    def fetch_additional_data(self, token):
-        headers = {'Authorization': f'Bearer {token}'}
-        response = requests.get(
-            'https://people.googleapis.com/v1/people/me?personFields=birthdays,genders,addresses,phoneNumbers',
-            headers=headers
-        )
-        if response.status_code == 200:
-            additional_data = response.json()
-            print("response JSON:", additional_data)
-            return additional_data
-        else:
-            print(f"Failed to fetch additional data. Status code: {response.status_code}, Response: {response.text}")
-            raise serializers.ValidationError(f"Failed to fetch additional data. Status code: {response.status_code}")
-
-    def post(self, request, *args, **kwargs):
-        print("Incoming data: ", request.data)
-        response = super().post(request, *args, **kwargs)
-        print("Post response data:", response.data)
-        
-        user = self.request.user
-        if user.is_authenticated:
-            access_token = request.data.get('access_token')
-            if access_token:
-                additional_data = self.fetch_additional_data(access_token)
-                print("Additional data:", additional_data)
-
-                if 'genders' in additional_data and additional_data['genders']:
-                    user.gender = additional_data['genders'][0].get('value', '')
-
-                if 'birthdays' in additional_data and additional_data['birthdays']:
-                    birthday = additional_data['birthdays'][0].get('date', {})
-                    year = birthday.get('year')
-                    month = birthday.get('month')
-                    day = birthday.get('day')
-                    if year and month and day:
-                        try:
-                            user.dob = datetime(year, month, day)
-                        except ValueError:
-                            print(f"Invalid date: {year}-{month}-{day}")
-
-                if 'addresses' in additional_data and additional_data['addresses']:
-                    user.address = additional_data['addresses'][0].get('formattedValue', '')
-
-                if 'phoneNumbers' in additional_data and additional_data['phoneNumbers']:
-                    user.phone = additional_data['phoneNumbers'][0].get('value', '')
-
-                user.save()
-                tokens = get_tokens_for_user(user)
-                response.data.update(tokens)
-            else:
-                print("Access token not found in request data.")
-        else:
-            print("User is not authenticated.")
-        
-        return response
-
-
-
 class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin):
     queryset = User.objects.all()
     serializer_class = UserDataSerializer
     renderer_classes = [UserRenderer]
-
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy', 'get_all_users']:
             self.permission_classes = [IsAuthenticated, IsAdminUser]
@@ -148,26 +80,78 @@ class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.Retri
         serializer = UserRegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        try:
+            token = generate_token.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            domain = config('Frontend_Domain')
+            link = f"{domain}/auth/{uid}/{token}"
+
+            subject = "Active your account"
+            message = render_to_string('Active_account.html', {
+                'name': user.username,
+                'link': link,
+            })
+            email = EmailMessage(subject, message, to=[user.email])
+            email.content_subtype = "html"
+            email.send()
+
+            return Response({'message': 'Acivation link sent to your email'}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({'error': 'Something went wrong'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['post'])
+    def social_login(self, request):
+        data = request.data
+        provider = data.get('provider')
+        email = data.get('email')
+        username = data.get('username')
+        profile = data.get('profile', {})
+        provider_id = profile.get('id') or profile.get('sub')
         
-        device = TOTPDevice.objects.create(user=user, name='default', key=random_hex())
-        user.otp_device = device
-        user.save()
+        if not provider or not email or not username:
+            return Response({'error': 'Required fields missing'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        avatar_url = profile.get('avatar_url') or profile.get('picture')
+        User = get_user_model()
 
-        totp = TOTP(key=device.bin_key)
-        otp_token = totp.token()
-        subject = "Activate your KitPOS account"
-        message = render_to_string('activation_email.html', {
-            'name': user.first_name,
-            'otp_code': otp_token,
-            'domain': config('DOMAIN'),
-        })
-        email = EmailMessage(subject, message, to=[user.email])
-        email.send()
+        try:
+            with transaction.atomic():
+                user, created = User.objects.get_or_create(email=email, defaults={
+                    'username': username,
+                    'state': 'active',
+                    'password': User.objects.make_random_password(),
+                })
+                
+                if avatar_url:
+                    self._save_user_avatar(user, avatar_url, username)
+                
+                account, account_created = Account.objects.get_or_create(
+                    user=user,
+                    provider=provider,
+                    defaults={'providerId': provider_id, 'details': str(profile)}
+                )
+                
+                if not account_created:
+                    account.providerId = provider_id
+                    account.details = str(profile)
+                    account.save()
 
-        return Response({
-            'message': 'Registration successful! Please verify your email to activate your account.',
-        }, status=status.HTTP_201_CREATED)
+                tokens = get_tokens_for_user(user)
+                return Response({'message': 'Login successful!', 'token': tokens}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def _save_user_avatar(self, user, avatar_url, username):
+        try:
+            response = requests.get(avatar_url)
+            response.raise_for_status()
+            user.profile.save(f'{username}_avatar.png', ContentFile(response.content))
+        except requests.RequestException as e:
+            print(f"Failed to download avatar: {e}")
+        except Exception as e:
+            print(f"Failed to save avatar: {e}")
+    
     @action(detail=False, methods=['post'])
     def login(self, request):
         serializer = UserLoginSerializer(data=request.data)
@@ -180,14 +164,31 @@ class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.Retri
             user = User.objects.get(email=email)
         except ObjectDoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        if not user.is_otp_verified:
-            return Response({'error': 'Please verify your account first.'}, status=status.HTTP_403_FORBIDDEN)
         
+        # if user.state != 'active':
+        #     try:
+        #         token = generate_token.make_token(user)
+        #         uid = urlsafe_base64_encode(force_bytes(user.pk))
+        #         domain = config('Frontend_Domain')
+        #         link = f"{domain}/auth/{uid}/{token}"
+
+        #         subject = "Active your account"
+        #         message = render_to_string('Active_account.html', {
+        #             'name': user.username,
+        #             'link': link,
+        #         })
+        #         email = EmailMessage(subject, message, to=[user.email])
+        #         email.content_subtype = "html"
+        #         email.send()
+
+        #         return Response({'message': 'Acivation link sent to your email'}, status=status.HTTP_200_OK)
+        #     except User.DoesNotExist:
+        #         return Response({'error': 'Something went wrong'}, status=status.HTTP_404_NOT_FOUND)
+                
         if not user.check_password(password):
             user_data = {
                 'email': user.email,
-                'name': f"{user.first_name} {user.last_name}",
+                'username': user.username,
                 'profile': request.build_absolute_uri(user.profile.url) if user.profile else None,
             }
             return Response({'error': 'Password does not match', 'user': user_data}, status=status.HTTP_400_BAD_REQUEST)
@@ -211,59 +212,6 @@ class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.Retri
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
-    def change_password(self, request):
-        serializer = UserChangePasswordSerializer(data=request.data, context={'user': request.user})
-        serializer.is_valid(raise_exception=True)
-        request.user.set_password(serializer.validated_data['new_password'])
-        request.user.save()
-
-        return Response({'message': 'Password changed successfully!'}, status=status.HTTP_200_OK)
-
-    @action(detail=False, methods=['post'])
-    def send_reset_password_email(self, request):
-        serializer = SendUserPasswordResetEmailSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        email = serializer.validated_data['email']
-
-        try:
-            user = User.objects.get(email=email)
-            token = generate_token.make_token(user)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            domain = config('DOMAIN')
-            link = f"{domain}/reset/{uid}/{token}"
-
-            subject = "Password Reset Requested"
-            message = render_to_string('reset_password_email.html', {
-                'name': user.first_name,
-                'domain': domain,
-                'uid': uid,
-                'token': token,
-                'link': link,
-            })
-            email = EmailMessage(subject, message, to=[user.email])
-            email.send()
-
-            return Response({'message': 'Password reset link sent!'}, status=status.HTTP_200_OK)
-        except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-
-    @action(detail=False, methods=['post'])
-    def reset_password(self, request, uidb64, token):
-        serializer = UserPasswordResetSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        uid = force_str(urlsafe_base64_decode(uidb64))
-        try:
-            user = User.objects.get(pk=uid)
-            if generate_token.check_token(user, token):
-                user.set_password(serializer.validated_data['new_password'])
-                user.save()
-                return Response({'message': 'Password reset successfully!'}, status=status.HTTP_200_OK)
-            else:
-                return Response({'error': 'Invalid token or UID'}, status=status.HTTP_400_BAD_REQUEST)
-        except User.DoesNotExist:
-            return Response({'error': 'Invalid token or UID'}, status=status.HTTP_400_BAD_REQUEST)
-
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.delete()
@@ -277,37 +225,75 @@ class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.Retri
         serializer.save()
         return Response(serializer.data)
 
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy', 'deactivate', 'block']:
-            self.permission_classes = [IsAuthenticated, IsAdminUser]
-        return super(UserViewSet, self).get_permissions()
+    
 
-    @action(detail=True, methods=['patch'])
-    def activate(self, request, pk=None):
-        user = self.get_object()
-        user.is_active = True
-        user.save()
-        return Response({'message': 'User activated successfully!'}, status=status.HTTP_200_OK)
+class UserActivationView(APIView):
+    def get(self, request, uidb64, token):
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
 
-    @action(detail=True, methods=['patch'])
-    def deactivate(self, request, pk=None):
-        user = self.get_object()
-        user.is_active = False
-        user.save()
-        return Response({'message': 'User deactivated successfully!'}, status=status.HTTP_200_OK)
+        if user is not None:
+            if generate_token.check_token(user, token):
+                user.state = 'active'
+                user.save()
+                return Response({'success': 'Your account has been activated successfully.'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'Activation link is expired.'}, status=status.HTTP_410_GONE)
+        else:
+            return Response({'error': 'Activation link is invalid.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=True, methods=['patch'])
-    def block(self, request, pk=None):
-        user = self.get_object()
-        user.is_blocked = True
-        user.save()
-        return Response({'message': 'User blocked successfully!'}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=['get'])
-    def get_all_users(self, request):
-        users = User.objects.all()
-        serializer = AdminUserDataSerializer(users, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+class PasswordResetView(APIView):
+
+    def post(self, request):
+        email = request.data.get('email')
+        try:
+            user = User.objects.get(email=email)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None        
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        if user:
+            otp = generate_otp()
+            user.otp_token = otp
+            user.otp_created_at = timezone.now()
+            user.save()
+            send_otp_email(user, otp)
+            return Response({'message': 'OTP sent to your email', 'uid': uid}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+    def patch(self, request):
+        uidb64 = request.data.get('uid')
+        token = request.data.get('token', None)
+        password = request.data.get('password', None)
+        otp = request.data.get('otp', None)
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+            print(user)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
+
+        if user and otp:
+            if is_otp_valid(user, otp):
+                token = generate_token.make_token(user)
+                uid = urlsafe_base64_encode(force_bytes(user.pk))
+                return Response({'message': 'OTP verified successfully', 'token': token, 'uid': uid}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
+        elif user and token:
+            if generate_token.check_token(user, token):
+                user.set_password(password)
+                user.save()
+                return Response({'success': 'Your account has been activated successfully.'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
     
 
 class AdminUserViewSet(viewsets.ModelViewSet):
@@ -316,9 +302,9 @@ class AdminUserViewSet(viewsets.ModelViewSet):
     renderer_classes = [UserRenderer]
     permission_classes = [IsAuthenticated, IsAdminUser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['is_active', 'is_blocked', 'email']
-    search_fields = ['first_name', 'last_name', 'email']
-    ordering_fields = ['email', 'first_name', 'last_name']
+    filterset_fields = ['state', 'email']
+    search_fields = ['username', 'email']
+    ordering_fields = ['email', 'username']
     pagination_class = CustomPagination
 
     def get_queryset(self):
@@ -347,7 +333,7 @@ class AdminUserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='by-username/(?P<username>[^/.]+)')
     def retrieve_user_by_username(self, request, username=None):
-        if not request.user.is_admin:
+        if not request.user.is_admin or not request.user.role == 'Admin':
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
         
         try:
@@ -448,7 +434,6 @@ class AdminUserViewSet(viewsets.ModelViewSet):
         
         return Response({'message': 'Users blocked successfully!'}, status=status.HTTP_200_OK)
     
-
 class SiteViewLogViewSet(viewsets.ModelViewSet):
     queryset = SiteViewLog.objects.all()
     serializer_class = SiteViewLogSerializer

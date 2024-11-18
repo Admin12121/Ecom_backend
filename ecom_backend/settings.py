@@ -33,9 +33,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'rest_framework_simplejwt',
-    # security apps
-    'django_otp',
-    'django_otp.plugins.otp_totp',
     # 'rest_framework_simplejwt.token_blacklist',
     #External
     'notification',
@@ -43,13 +40,6 @@ INSTALLED_APPS = [
     'products',
     'sales',
     'layout',
-    #social
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-    'allauth.socialaccount.providers.google',    
-    'dj_rest_auth',
-    'dj_rest_auth.registration',    
 ]
 
 MIDDLEWARE = [
@@ -62,8 +52,6 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     #corsheader
     'corsheaders.middleware.CorsMiddleware',
-    'django_otp.middleware.OTPMiddleware',
-    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = "ecom_backend.urls"
@@ -180,43 +168,7 @@ PASSWORD_RESET_TIMEOUT=300          # 300 Sec = 5 Min
 
 CORS_ALLOW_ALL_ORIGINS = True
 
-SITE_ID = 1
 
-AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.ModelBackend',  # Default Django authentication backend
-    'allauth.account.auth_backends.AuthenticationBackend',  # allauth authentication backend
-)
-
-
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/'
-
-
-SOCIALACCOUNT_PROVIDERS = {
-    'google': {
-        'SCOPE': [
-            'profile',
-            'email',
-            'https://www.googleapis.com/auth/user.addresses.read',
-            'https://www.googleapis.com/auth/user.birthday.read',
-            'https://www.googleapis.com/auth/user.gender.read',
-            'https://www.googleapis.com/auth/user.phonenumbers.read',
-            'https://www.googleapis.com/auth/userinfo.profile',
-            'https://www.googleapis.com/auth/userinfo.email'
-        ],
-        'AUTH_PARAMS': {
-            'access_type': 'online',
-        },        
-        'FIELDS': [
-            'email',
-            'first_name',
-            'last_name',
-            'picture',
-            'gender',
-            'birthdate',
-            'phone'
-        ],
-    },
-}
-
-SOCIALACCOUNT_ADAPTER = 'accounts.adapters.CustomSocialAccountAdapter'
+FILE_UPLOAD_HANDLERS = [
+    'django.core.files.uploadhandler.TemporaryFileUploadHandler',
+]

@@ -9,15 +9,15 @@ class UserModelAdmin(BaseUserAdmin):
    list_filter = ('is_admin',)
    fieldsets = (
        ('User Credentials', {'fields': ('email', 'password')}),
-       ('Personal info', {'fields': ('profile','username','first_name','last_name','phone','dob','gender','social', 'otp_device','created_at','last_login','tc')}),
-       ('Permissions', {'fields': ('role','is_otp_verified','is_blocked','is_active','is_admin',)}),
+       ('Personal info', {'fields': ('profile','username','first_name','last_name','phone','dob','gender', 'created_at','last_login',)}),
+       ('Permissions', {'fields': ('role','state','is_admin',)}),
    )
    # add_fieldsets is not a standard ModelAdmin attribute. UserModelAdmin
    # overrides get_fieldsets to use this attribute when creating a user.
    add_fieldsets = (
        (None, {
            'classes': ('wide',),
-           'fields': ('email', 'first_name','last_name', 'tc', 'password1', 'password2'),
+           'fields': ('email', 'first_name','last_name', 'password1', 'password2'),
        }),
    )
    readonly_fields = ('created_at',)

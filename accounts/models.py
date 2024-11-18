@@ -1,14 +1,13 @@
 from django.db import models
-from django_otp.plugins.otp_totp.models import TOTPDevice
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.validators import FileExtensionValidator
-from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
-from django.utils import timezone
+from django.utils.crypto import get_random_string
+from django.db import models
 from PIL import Image
 from io import BytesIO
 from django.core.files.uploadedfile import InMemoryUploadedFile
+from django.utils import timezone
 import sys
-from allauth.account.models import EmailAddress
-from django.utils.crypto import get_random_string
 
 def compress_image(image, format='PNG', quality=85):
     image_temporary = Image.open(image)
@@ -20,21 +19,21 @@ def compress_image(image, format='PNG', quality=85):
     return image
 
 class UserManager(BaseUserManager):
-    def create_user(self, email, first_name, last_name, phone, tc, password=None, **extra_fields):
+    def create_user(self, email, first_name, last_name, phone,  password=None, **extra_fields):
         if not email:
             raise ValueError('User must have an email address')
         email = self.normalize_email(email)
-        user = self.model(email=email, first_name=first_name, last_name=last_name, phone=phone, tc=tc, **extra_fields)
+        user = self.model(email=email, first_name=first_name, last_name=last_name, phone=phone, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, first_name, last_name, phone, tc, password=None, **extra_fields):
+    def create_superuser(self, email, first_name, last_name, phone, password=None, **extra_fields):
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_admin', True)
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
-        return self.create_user(email, first_name, last_name, phone, tc, password, **extra_fields)
+        return self.create_user(email, first_name, last_name, phone, password, **extra_fields)
 
 class User(AbstractBaseUser):
     ROLE_CHOICES = (
@@ -42,30 +41,35 @@ class User(AbstractBaseUser):
         ('Staff','staff'),
         ('User', 'user'),
     )
-    email = models.EmailField(verbose_name='Email', max_length=255, unique=True)
-    profile = models.ImageField(upload_to='profile/', null=True, blank=True, validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png'])])
     first_name = models.CharField(max_length=200, blank=True)
     last_name = models.CharField(max_length=200, blank=True)
     username = models.CharField(max_length=200, blank=True, null=True, unique=True)
+    email = models.EmailField(verbose_name='Email', max_length=255, unique=True)
+    profile = models.ImageField(upload_to='profile/', null=True, blank=True, validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png'])])
     phone = models.CharField(max_length=15, blank=True)
     dob = models.CharField(max_length=10, null=True, blank=True)
     gender = models.CharField(max_length=10, null=True, blank=True)
-    social = models.CharField(max_length=255, null=True, blank=True, default="default")
-    otp_device = models.ForeignKey(TOTPDevice,related_name='otp_user', on_delete=models.SET_NULL, null=True, blank=True)
-    is_otp_verified = models.BooleanField(default=False)
     role = models.CharField(max_length=20,choices=ROLE_CHOICES, default="User", null=True, blank=True)
-    tc = models.BooleanField(default=False)
-    is_blocked = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
+    
+    STATE_CHOICES = (
+        ('inactive', 'Inactive'),
+        ('active', 'Active'),
+        ('blocked', 'Blocked'),
+    )
+    state = models.CharField(max_length=20, choices=STATE_CHOICES, default='inactive')
+
     is_admin = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_login = models.DateTimeField(blank=True, null=True)
+
+    otp_token = models.CharField(max_length=6, null=True, blank=True)
+    otp_created_at = models.DateTimeField(null=True, blank=True)
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['first_name', 'last_name', 'phone', 'tc']
+    REQUIRED_FIELDS = ['first_name', 'last_name', 'phone']
 
     def save(self, *args, **kwargs):
         if not self.username:
@@ -81,7 +85,7 @@ class User(AbstractBaseUser):
         super(User, self).save(*args, **kwargs)
     class Meta:
         indexes = [
-            models.Index(fields=['id', 'email', 'first_name']),  # Index for id and year fields
+            models.Index(fields=['id', 'email', 'username']),
         ]
     def __str__(self):
         return self.email
@@ -96,10 +100,14 @@ class User(AbstractBaseUser):
     def is_staff(self):
         return self.is_admin
 
-    @property
-    def social_accounts(self):
-        return EmailAddress.objects.filter(user=self)
+class Account(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    provider = models.CharField(max_length=255)
+    providerId = models.CharField(max_length=255)
+    details = models.TextField(null=True, blank=True)
 
+    class Meta:
+        db_table = 'accounts'
 
 class DeliveryAddress(models.Model):
     user = models.ForeignKey(User, related_name='delivery_address', on_delete=models.CASCADE)
