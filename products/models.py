@@ -62,7 +62,7 @@ class ProductVariant(models.Model):
     product_stripe_id = models.CharField(max_length=255, null=True, blank=True)
     size = models.CharField(max_length=50, null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    discount = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    discount = models.IntegerField(null=True, blank=True)
     stock = models.PositiveIntegerField()
 
     # class Meta:
@@ -76,6 +76,7 @@ class ProductVariant(models.Model):
 
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
+    index = models.IntegerField(null=True, blank=True)
     image = models.ImageField(upload_to='product_images/', validators=[validate_image_format])
 
     def delete(self, *args, **kwargs):

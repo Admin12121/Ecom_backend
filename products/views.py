@@ -141,9 +141,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         variant_serializer.save()
 
     def _save_images(self, images_data, product):
-        for image in images_data:
+        for index, image in enumerate(images_data):
             if image:
-                image_data = {'product': product.id, 'image': image}
+                image_index = self.request.data.get(f'imageIndex[{index}]')
+                image_data = {'product': product.id, 'image': image, 'index': image_index}
                 image_serializer = ProductImageSerializer(data=image_data)
                 image_serializer.is_valid(raise_exception=True)
                 image_serializer.save()
