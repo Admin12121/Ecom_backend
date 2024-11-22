@@ -40,7 +40,7 @@ class Product(models.Model):
         
     class Meta:
         indexes = [
-            models.Index(fields=['id', 'product_name']),
+            models.Index(fields=['id', 'product_name', 'productslug']),
             models.Index(fields=['category']),
             models.Index(fields=['subcategory']),
         ]
@@ -65,10 +65,8 @@ class ProductVariant(models.Model):
     discount = models.IntegerField(null=True, blank=True)
     stock = models.PositiveIntegerField()
 
-    # class Meta:
-    #     constraints = [
-    #         models.UniqueConstraint(fields=['product'], name='unique_product_size')
-    #     ]
+    class Meta:
+        unique_together = ('product', 'size')
 
     def __str__(self):
         return f"{self.product.product_name} - {self.size or 'Single'}"

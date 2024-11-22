@@ -96,6 +96,32 @@ class ProductSerializer(serializers.ModelSerializer):
                 
         return representation
 
+class ProductByIdsSerializer(serializers.ModelSerializer):
+    categoryname = serializers.SerializerMethodField()
+    class Meta:
+        model = Product
+        fields = '__all__'
+
+    def get_categoryname(self, obj):
+        return obj.category.name if obj.category else None        
+    
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.method == 'GET':
+            variants = instance.productvariant_set.all()
+            images = instance.images.first()
+            variants_data = ProductVariantSerializer(variants, many=True).data
+            if len(variants_data) == 1:
+                representation['variants'] = variants_data[0]
+            else:
+                representation['variants'] = variants_data 
+            representation['images'] = ImageDataSerializer(images, context= self.context).data
+            representation['categoryname'] = self.get_categoryname(instance)
+        return representation
+
+
+
 class ReviewWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review

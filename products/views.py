@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply, NotifyUser, AddtoCart, ReviewImage
 from .serializers import (CategorySerializer, SubcategorySerializer, ProductSerializer,
                           ProductVariantSerializer, ProductImageSerializer, ReviewSerializer,ReviewWriteSerializer, CommentSerializer,
-                          CommentReplySerializer, NotifyUserSerializer, AddtoCartSerializer, CategoryViewSerializer, ReviewImageSerializer, ReviewImageWriteSerializer)
+                          CommentReplySerializer, NotifyUserSerializer, AddtoCartSerializer, CategoryViewSerializer, ProductByIdsSerializer, ReviewImageWriteSerializer)
 from accounts.models import User
 from notification.models import Notification
 from rest_framework import viewsets, permissions, status
@@ -223,10 +223,10 @@ class ProductViewSet(viewsets.ModelViewSet):
             
             page = self.paginate_queryset(queryset)
             if page is not None:
-                serializer = self.get_serializer(page, many=True, context={'request': request, 'is_detail': False})
+                serializer = ProductByIdsSerializer(page, many=True, context={'request': request, 'is_detail': False})
                 return self.get_paginated_response(serializer.data)
 
-            serializer = self.get_serializer(queryset, many=True, context={'request': request, 'is_detail': False})
+            serializer = ProductByIdsSerializer(queryset, many=True, context={'request': request, 'is_detail': False})
             return Response(serializer.data)
         else:
             return Response({"error": "No IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
