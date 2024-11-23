@@ -216,6 +216,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def get_products_by_ids(self, request):
         ids = request.query_params.get('ids', None)
+        all_flag = request.query_params.get('all', 'false').lower() == 'true'  # Check for 'all' flag
         if ids:
             ids_list = ids.split(',')
             print(ids_list)
@@ -223,10 +224,10 @@ class ProductViewSet(viewsets.ModelViewSet):
             
             page = self.paginate_queryset(queryset)
             if page is not None:
-                serializer = ProductByIdsSerializer(page, many=True, context={'request': request, 'is_detail': False})
+                serializer = self.get_serializer(page, many=True, context={'request': request, 'is_detail': False}) if all_flag else ProductByIdsSerializer(page, many=True, context={'request': request, 'is_detail': False})
                 return self.get_paginated_response(serializer.data)
 
-            serializer = ProductByIdsSerializer(queryset, many=True, context={'request': request, 'is_detail': False})
+            serializer = self.get_serializer(queryset, many=True, context={'request': request, 'is_detail': False}) if all_flag else ProductByIdsSerializer(queryset, many=True, context={'request': request, 'is_detail': False})
             return Response(serializer.data)
         else:
             return Response({"error": "No IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
