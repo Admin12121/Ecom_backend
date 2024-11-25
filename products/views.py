@@ -68,7 +68,6 @@ class ProductViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         data = request.data
-        print(data)
         is_multi_variant = data.get('is_multi_variant', 'false').lower() == 'true'
         variants_data = self._extract_variants_data(data)
         images_data = self._extract_images_data(data)
@@ -219,7 +218,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         all_flag = request.query_params.get('all', 'false').lower() == 'true'  # Check for 'all' flag
         if ids:
             ids_list = ids.split(',')
-            print(ids_list)
             queryset = self.queryset.filter(id__in=ids_list)
             
             page = self.paginate_queryset(queryset)
@@ -232,8 +230,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         else:
             return Response({"error": "No IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
         
-
-    @method_decorator(cache_page(60*15))  # Cache for 15 minutes    def retrieve(self, request, *args, **kwargs):
+    @method_decorator(cache_page(60*15))
     def retrieve(self, request, *args, **kwargs):
         productslug = request.query_params.get('productslug')
         if productslug:
@@ -351,7 +348,6 @@ class RecommendationView(APIView):
             recommended_products = recommended_products.exclude(id=product_id)
         return recommended_products[:10]
 
-
 class ProductVariantViewSet(viewsets.ModelViewSet):
     queryset = ProductVariant.objects.select_related('product').all()
     serializer_class = ProductVariantSerializer
@@ -406,7 +402,6 @@ class ReviewPostViewSet(viewsets.ModelViewSet):
                         raise e
         return Response({"msg": "Review Updated Successfully"}, status=status.HTTP_200_OK)
                         
-
 class ReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.select_related('product', 'user').all().order_by('-id')
     serializer_class = ReviewSerializer
@@ -447,7 +442,6 @@ class ReviewViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
     
-
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.select_related('product', 'user').all()
     serializer_class = CommentSerializer
@@ -544,7 +538,6 @@ class AddToCartViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = get_object_or_404(User, email = self.request.user)
-        print(self.queryset.filter(user=user))
         return self.queryset.filter(user=user)
 
 
@@ -572,24 +565,28 @@ class AddToCartViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        data = request.data
+        instance = AddtoCart.objects.get(user=request.user, product_id=data['product'], variant_id=data['variant'])
+        serializer = self.get_serializer(instance, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
         if serializer.validated_data['pcs'] > instance.variant.stock:
             return Response({'error': 'Not enough stock available'}, status=status.HTTP_400_BAD_REQUEST)
         self.perform_update(serializer)
         return Response({'msg': 'Cart Updated'}, status=status.HTTP_200_OK)
-
-    def destroy(self, request, *args, **kwargs):
+    
+    @action(detail=False, methods=['delete'], permission_classes=[IsAuthenticated])
+    def cartdestroy(self, request, *args, **kwargs):
         user = request.user
-        product_id =  kwargs.get('pk')
+        product_id = kwargs.get('product_id')
+        variant_id = kwargs.get('variant_id')
 
-        if not product_id:
-            return Response({'error': 'Product ID not provided'}, status=status.HTTP_400_BAD_REQUEST)
+        if not product_id or not variant_id:
+            return Response({'error': 'Product ID or Variant ID not provided'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            cart_item = AddtoCart.objects.get(user=user, product_id=product_id)
+            cart_item = AddtoCart.objects.get(user=user, product_id=product_id, variant_id=variant_id)
             cart_item.delete()
             return Response({'msg': 'Item removed from cart'}, status=status.HTTP_200_OK)
         except AddtoCart.DoesNotExist:
             return Response({'error': 'Item not found in cart'}, status=status.HTTP_404_NOT_FOUND)
+        
