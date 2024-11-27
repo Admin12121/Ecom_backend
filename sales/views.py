@@ -138,7 +138,6 @@ class RedeemCodeViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='verify-code')
     def verify_code(self, request):
         code = request.data.get('code')
-        print(code, request.data)
         if not code:
             return Response({'error': 'Code is required'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -150,7 +149,7 @@ class RedeemCodeViewSet(viewsets.ModelViewSet):
         if redeem_code.valid_until < timezone.now().date():
             return Response({'error': 'Code is expired'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if redeem_code.used >= redeem_code.limit:
+        if redeem_code.limit is not None and redeem_code.used >= redeem_code.limit:
             return Response({'error': 'Code usage limit reached'}, status=status.HTTP_400_BAD_REQUEST)
         
         data = {

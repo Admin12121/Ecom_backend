@@ -302,6 +302,7 @@ class TrendingView(APIView):
 
         serializer = ProductSerializer(trending_products, many=True, context={'request': request, 'is_detail': False})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 class RecommendationView(APIView):
     permission_classes = [permissions.AllowAny]
 
