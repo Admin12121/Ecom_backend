@@ -1,5 +1,5 @@
 from django.db import models
-from accounts.models import User
+from accounts.models import User, DeliveryAddress
 from products.models import Product, ProductVariant
 from django.utils import timezone
 from django.db.models.signals import pre_save
@@ -23,10 +23,7 @@ class Redeem_Code(models.Model):
 
 class Sales(models.Model):
     costumer_name = models.ForeignKey(User, on_delete=models.SET_DEFAULT, default=None)
-    transactionuid = models.IntegerField(null=True, blank=True)
-    sub_total = models.FloatField()
-    shipping = models.FloatField(null=True,blank=True)
-    discount = models.FloatField(null=True, blank=True)
+    transactionuid = models.CharField(max_length=225, null=True, blank=True)
     status = models.CharField(
         max_length=10,
         choices=[
@@ -40,10 +37,12 @@ class Sales(models.Model):
         default='pending',
     )
     total_amt = models.FloatField()
+    sub_total = models.FloatField()
+    shipping = models.ForeignKey(DeliveryAddress, on_delete=models.SET_DEFAULT, null=True,blank=True, default=None)
+    discount = models.FloatField(null=True, blank=True)
     payment_method = models.CharField(max_length=100,null=True,blank=True)
-    redeemCode= models.ForeignKey(Redeem_Code,on_delete=models.SET_DEFAULT, default=None, null=True, blank=True)
-    redeem_amt = models.FloatField(null=True, blank=True)
-    grand_total = models.FloatField(null=True)
+    redeem_data = models.CharField(max_length=100,null=True,blank=True)
+    payment_intent_id = models.CharField(max_length=100,null=True,blank=True)
     created = models.DateTimeField(auto_now_add=True,null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True,null=True, blank=True)
 
@@ -55,7 +54,6 @@ class Saled_Products(models.Model):
    transition = models.ForeignKey(Sales, on_delete=models.CASCADE, null=True, blank=True,related_name='products')
    product = models.ForeignKey(Product, on_delete=models.SET_DEFAULT, null=True, default=None)
    variant = models.ForeignKey(ProductVariant,on_delete=models.SET_DEFAULT,null=True, default=None)
-   product_name = models.CharField(max_length=100, null=True, blank=True)
    price = models.FloatField()
    qty = models.FloatField()
    total = models.FloatField()

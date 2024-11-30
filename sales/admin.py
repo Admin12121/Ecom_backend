@@ -11,7 +11,7 @@ class Saled_ProdInline(admin.TabularInline):
 
 class SalesAdmin(admin.ModelAdmin):
     inlines = [Saled_ProdInline]
-    list_display = ('costumer_name' ,'transactionuid' , 'grand_total', 'status')
+    list_display = ('costumer_name' ,'transactionuid' , 'status')
     search_fields = ('costumer_name','status', 'transactionuid')
 
 

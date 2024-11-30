@@ -11,6 +11,7 @@ from django.db.models import F
 from django.utils import timezone
 from accounts.renderers import UserRenderer
 from rest_framework.decorators import action
+from django.db import transaction 
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
@@ -24,9 +25,9 @@ class SalesViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['costumer_name', 'date']
+    filterset_fields = ['costumer_name']
     search_fields = ['costumer_name__username', 'invoiceno']
-    ordering_fields = ['date', 'total']
+
     
     def get_queryset(self):
         user = self.request.user
@@ -37,65 +38,64 @@ class SalesViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         invoice_data = self.request.data.get('products', [])
         user = self.request.user
-        redeem_code = self.request.data.get('Code')
-        redeem_amt = self.request.data.get('redeem_amt')
+        redeem_data = self.request.data.get('redeemData')
         shipping = self.request.data.get('shipping')
+        discount = self.request.data.get('discount')
         sub_total = self.request.data.get('sub_total')
         total_amt = self.request.data.get('total_amt')
-        grand_total = self.request.data.get('grand_total')
         transactionuid = self.request.data.get('transactionuid')
         payment_intent_id = self.request.data.get('paymentIntentId')
         
         redeem_code_obj = None
         redeem_code_error = None
-        if redeem_code:
-            try:
-                redeem_code_obj = Redeem_Code.objects.get(code=redeem_code)
-                if redeem_code_obj.valid_until < timezone.now().date():
-                    redeem_code_error = "Redeem code is expired."
-                elif redeem_code_obj.used >= redeem_code_obj.limit:
-                    redeem_code_error = "Redeem code usage limit reached."
-                else:
-                    redeem_code_obj.used += 1
-                    redeem_code_obj.save()
-            except Redeem_Code.DoesNotExist:
-                redeem_code_error = "Invalid redeem code - object does not exist."
-        
-        
-        sale = serializer.save(
-            costumer_name=user,
-            redeemCode=redeem_code_obj,
-            redeem_amt=redeem_amt,
-            shipping=shipping,
-            sub_total=sub_total,
-            total_amt=total_amt,
-            grand_total=grand_total,
-            transactionuid=transactionuid,
-            payment_method=payment_intent_id
-        )
-        
-        for data in invoice_data:
-            product = get_object_or_404(Product, id=data['id'])
-            variant = get_object_or_404(ProductVariant, id=data['variantId'])
-            quantity_sold = data['pcs']
-            price = variant.price
+        with transaction.atomic():
+            if redeem_data:
+                try:
+                    redeem_code_obj = Redeem_Code.objects.get(code=redeem_data.id)
+                    if redeem_code_obj.valid_until < timezone.now().date():
+                        redeem_code_error = "Redeem code is expired."
+                    elif redeem_code_obj.used >= redeem_code_obj.limit:
+                        redeem_code_error = "Redeem code usage limit reached."
+                    else:
+                        redeem_code_obj.used += 1
+                        redeem_code_obj.save()
+                except Redeem_Code.DoesNotExist:
+                    redeem_code_error = "Invalid redeem code - object does not exist."
             
-            if variant.stock < quantity_sold:
-                raise serializers.ValidationError({"error": f"Not enough stock for product variant {variant.id}"})
-            
-            ProductVariant.objects.filter(id=variant.id).update(stock=F('stock') - quantity_sold)
-            
-            Saled_Products.objects.create(
-                transition=sale,
-                product=product,
-                variant=variant,
-                product_name=product.product_name,
-                price=price,
-                qty=quantity_sold,
-                total=quantity_sold * price
+            if redeem_code_error:
+                return Response({"warning": redeem_code_error}, status=status.HTTP_201_CREATED)
+        
+            sale = serializer.save(
+                costumer_name=user,
+                redeem_data=redeem_code_obj.name if redeem_code_obj and redeem_code_obj.name else None,
+                shipping=shipping,
+                discount=discount,
+                sub_total=sub_total,
+                total_amt=total_amt,
+                transactionuid=transactionuid,
+                payment_method=payment_intent_id
             )
-        if redeem_code_error:
-            return Response({"warning": redeem_code_error}, status=status.HTTP_201_CREATED)
+            
+            for data in invoice_data:
+                product = get_object_or_404(Product, id=data['product'])
+                variant = get_object_or_404(ProductVariant, id=data['variant'])
+                quantity_sold = data['pcs']
+                price = variant.price
+                
+                if variant.stock < quantity_sold:
+                    raise serializers.ValidationError({"error": f"Not enough stock for product variant {variant.id}"})
+                
+                ProductVariant.objects.filter(id=variant.id).update(stock=F('stock') - quantity_sold)
+                
+                Saled_Products.objects.create(
+                    transition=sale,
+                    product=product,
+                    variant=variant,
+                    price=price,
+                    qty=quantity_sold,
+                    total=quantity_sold * price
+                )
+
         return Response({"message": "payment complete"}, status=status.HTTP_201_CREATED)
 
 class RedeemCodeViewSet(viewsets.ModelViewSet):
@@ -153,6 +153,7 @@ class RedeemCodeViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Code usage limit reached'}, status=status.HTTP_400_BAD_REQUEST)
         
         data = {
+            'id': redeem_code.id,
             'type': redeem_code.type,
             'discount': redeem_code.discount,
             'minimum': redeem_code.minimum,

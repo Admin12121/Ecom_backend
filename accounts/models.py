@@ -8,6 +8,7 @@ from io import BytesIO
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.utils import timezone
 import sys
+from django.core.exceptions import ValidationError
 
 def compress_image(image, format='PNG', quality=85):
     image_temporary = Image.open(image)
@@ -110,15 +111,35 @@ class Account(models.Model):
         db_table = 'accounts'
 
 class DeliveryAddress(models.Model):
-    user = models.ForeignKey(User, related_name='delivery_address', on_delete=models.CASCADE)
-    name = models.CharField(max_length=255)
-    address = models.CharField(max_length=255)
-    mobile_number = models.CharField(max_length=255)
-    provience = models.CharField(max_length=255)
-    city = models.CharField(max_length=255)
-    area = models.CharField(max_length=255)
-    default_delivery_addresh = models.BooleanField(default=False)
-    default_billing_address = models.BooleanField(default=False)
+    user = models.ForeignKey(User, related_name='delivery_addresses', on_delete=models.CASCADE)
+    address = models.CharField(max_length=225)
+    country = models.CharField(max_length=225)
+    city = models.CharField(max_length=225)
+    zipcode = models.CharField(max_length=225)
+    default = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'default'],
+                condition=models.Q(default=True),
+                name='unique_default_address_per_user'
+            )
+        ]
+
+    def clean(self):
+        if self.default:
+            # Check if the user already has a default address
+            default_exists = DeliveryAddress.objects.filter(user=self.user, default=True).exclude(pk=self.pk).exists()
+            if default_exists:
+                raise ValidationError("The user already has a default delivery address.")
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()  # Run the clean method before saving
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.user.email if self.user else "No User"} - {self.address}'
 
 
 class SearchHistory(models.Model):

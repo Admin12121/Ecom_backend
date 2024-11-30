@@ -2,7 +2,7 @@ from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
-from .models import User, Account, UserDevice, SiteViewLog, SearchHistory
+from .models import User, Account, UserDevice, SiteViewLog, SearchHistory, DeliveryAddress
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserDataSerializer,  AdminUserDataSerializer, UserDeviceSerializer, 
     SiteViewLogSerializer, BulkUserActionSerializer,
@@ -63,6 +63,7 @@ class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.Retri
     queryset = User.objects.all()
     serializer_class = UserDataSerializer
     renderer_classes = [UserRenderer]
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy', 'get_all_users']:
             self.permission_classes = [IsAuthenticated, IsAdminUser]
@@ -218,14 +219,12 @@ class UserViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.Retri
         return Response({'message': 'Object deleted'}, status=status.HTTP_204_NO_CONTENT)
 
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        partial = kwargs.pop('partial', True)
+        user = request.user
+        serializer = self.get_serializer(user, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data)
-
-    
+        return Response("Profile Updated.", status=status.HTTP_200_OK)
 
 class UserActivationView(APIView):
     def get(self, request, uidb64, token):
@@ -341,7 +340,6 @@ class AdminUserViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Include related model data
         context = {'request': request}
         user_data = AdminUserDataSerializer(user, context=context).data
         user_data['delivery_address'] = DeliveryAddressSerializer(user.delivery_address.all(), many=True).data
@@ -575,3 +573,48 @@ class SearchView(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(search_history)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+
+class DeliveryAddressView(viewsets.ModelViewSet):
+    queryset = DeliveryAddress.objects.all().order_by('-id')
+    serializer_class = DeliveryAddressSerializer
+    renderer_classes = [UserRenderer]
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        data = request.data.copy()
+        data['user'] = user.id
+        
+        if data.get('default'):
+            DeliveryAddress.objects.filter(user=user, default=True).update(default=False)
+
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response("Address Created", status=status.HTTP_201_CREATED) 
+
+    def update(self, request, *args, **kwargs):
+        user = request.user
+        instance = self.get_object()
+        data = request.data.copy()
+        
+        if data.get('default'):
+            DeliveryAddress.objects.filter(user=user, default=True).update(default=False)
+
+        serializer = self.get_serializer(instance, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response("Address Updated", status=status.HTTP_200_OK)
+    
+
+    @action(detail=False, methods=['get'])
+    def get_default(self, request):
+        user = request.user
+        default_address = DeliveryAddress.objects.filter(user=user, default=True).first()
+        if default_address:
+            serializer = self.get_serializer(default_address)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response({"message": "No data available"}, status=status.HTTP_404_NOT_FOUND)    
