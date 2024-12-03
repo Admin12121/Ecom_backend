@@ -81,7 +81,7 @@ class UserDeviceSerializer(serializers.ModelSerializer):
 class DeliveryAddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryAddress
-        fields = '__all__'
+        exclude = ['is_deleted']
 
 class SearchHistorySerializer(serializers.ModelSerializer):
     class Meta:

@@ -25,5 +25,6 @@ urlpatterns = [
     path("reviews/", ReviewViewSet.as_view({'get': 'list'}), name='admin-reviews'),
     path('recommendations/', RecommendationView.as_view(), name='recommendations'),
     path('get_products_by_ids/', ProductViewSet.as_view({'get': 'get_products_by_ids'}), name='get-products-by-ids'), 
-    path('cart/<int:product_id>/variant/<int:variant_id>/', AddToCartViewSet.as_view({'delete':'cartdestroy'}), name='cartdestroy')
+    path('cart/<int:product_id>/variant/<int:variant_id>/', AddToCartViewSet.as_view({'delete':'cartdestroy'}), name='cartdestroy'),
+    path('reviews/user/', ReviewViewSet.as_view({'get': 'get_user_reviews'}), name='user-reviews'),
 ]

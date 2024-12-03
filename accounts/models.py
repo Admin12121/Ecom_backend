@@ -117,6 +117,7 @@ class DeliveryAddress(models.Model):
     city = models.CharField(max_length=225)
     zipcode = models.CharField(max_length=225)
     default = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         constraints = [

@@ -112,6 +112,7 @@ class Review(models.Model):
     content = models.TextField()
     recommended = models.BooleanField(default=True)
     delivery = models.BooleanField(default=True)
+    favoutare = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

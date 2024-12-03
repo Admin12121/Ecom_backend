@@ -576,7 +576,7 @@ class SearchView(viewsets.ModelViewSet):
     
 
 class DeliveryAddressView(viewsets.ModelViewSet):
-    queryset = DeliveryAddress.objects.all().order_by('-id')
+    queryset = DeliveryAddress.objects.filter(is_deleted=False).order_by('-id')
     serializer_class = DeliveryAddressSerializer
     renderer_classes = [UserRenderer]
     permission_classes = [IsAuthenticated]
@@ -608,11 +608,16 @@ class DeliveryAddressView(viewsets.ModelViewSet):
         serializer.save()
         return Response("Address Updated", status=status.HTTP_200_OK)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.save()
+        return Response("Address Deleted", status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['get'])
     def get_default(self, request):
         user = request.user
-        default_address = DeliveryAddress.objects.filter(user=user, default=True).first()
+        default_address = DeliveryAddress.objects.filter(user=user, default=True, is_deleted=False).first()
         if default_address:
             serializer = self.get_serializer(default_address)
             return Response(serializer.data, status=status.HTTP_200_OK)

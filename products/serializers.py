@@ -177,3 +177,38 @@ class AddtoCartSerializer(serializers.ModelSerializer):
     class Meta:
         model = AddtoCart
         fields = '__all__'
+
+       
+class ReviewWithProductSerializer(serializers.ModelSerializer):
+    product_name = serializers.SerializerMethodField()
+    productslug = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
+    product_image = serializers.SerializerMethodField()
+    review_images = ReviewImageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Review
+        fields = ['user', 'rating', 'title', 'content', 'recommended', 'delivery', 'review_images', 'created_at', 'product_name', 'productslug', 'category_name', 'product_image']
+
+    def get_product_name(self, obj):
+        return obj.product.product_name if obj.product else None
+    
+    def get_productslug(self, obj):
+        return obj.product.productslug if obj.product else None
+
+    def get_category_name(self, obj):
+        return obj.product.category.name if obj.product and obj.product.category else None
+
+    def get_product_image(self, obj):
+        request = self.context.get('request')
+        image_instance = obj.product.images.first()
+        if image_instance:
+            return request.build_absolute_uri(image_instance.image.url)
+        
+        return None
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.method == 'GET':
+            representation['review_images'] = ReviewImageSerializer(instance.review_images.all(), many=True, context=self.context).data
+        return representation

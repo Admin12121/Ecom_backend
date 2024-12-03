@@ -17,7 +17,15 @@ class Saled_ProductsSerializer(serializers.ModelSerializer):
 class SalesDataSerializer(serializers.ModelSerializer):
     products = Saled_ProductsSerializer(many=True, read_only=True)
     costumer_name = serializers.SlugRelatedField(read_only=True, slug_field='username')
-    shipping = DeliveryAddressSerializer()
+    shipping = DeliveryAddressSerializer(read_only=True)
+    class Meta:
+        model = Sales
+        fields = "__all__"
+
+class SalesPostDataSerializer(serializers.ModelSerializer):
+    products = Saled_ProductsSerializer(many=True, read_only=True)
+    costumer_name = serializers.SlugRelatedField(read_only=True, slug_field='username')
+
     class Meta:
         model = Sales
         fields = "__all__"

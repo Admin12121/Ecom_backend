@@ -2,10 +2,8 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import Category, Subcategory, Product, ProductVariant, ProductImage, Review, Comment, CommentReply, NotifyUser, AddtoCart, ReviewImage
-from .serializers import (CategorySerializer, SubcategorySerializer, ProductSerializer,
-                          ProductVariantSerializer, ProductImageSerializer, ReviewSerializer,ReviewWriteSerializer, CommentSerializer,
-                          CommentReplySerializer, NotifyUserSerializer, AddtoCartSerializer, CategoryViewSerializer, ProductByIdsSerializer, ReviewImageWriteSerializer)
+from .models import *
+from .serializers import *
 from accounts.models import User
 from notification.models import Notification
 from rest_framework import viewsets, permissions, status
@@ -365,9 +363,10 @@ class ReviewPostViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
-        data = request.data.copy()
+        data = request.data
         data['user'] = request.user.id
         data['product']  = Product.objects.get(productslug=data.get('product_slug')).id
+        image = data.pop('image', None)
         serializer = self.get_serializer(data=data)
         if serializer.is_valid(raise_exception=True):
             with transaction.atomic():
@@ -443,6 +442,19 @@ class ReviewViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
     
+    @action(detail=False, methods=['get'])
+    def get_user_reviews(self, request, *args, **kwargs):
+        user = request.user
+        if not user:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        reviews = Review.objects.filter(user=user).order_by('-created_at')
+        page = self.paginate_queryset(reviews)
+        if page is not None:
+            serializer = ReviewWithProductSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        serializer = ReviewWithProductSerializer(reviews, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.select_related('product', 'user').all()
     serializer_class = CommentSerializer
