@@ -180,6 +180,63 @@ class ProductViewSet(viewsets.ModelViewSet):
         
         return queryset
 
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        data = request.data
+        is_multi_variant = data.get('is_multi_variant', 'false').lower() == 'true'
+        instance.product_name = data.get('product_name', instance.product_name)
+        instance.description = data.get('description', instance.description)
+        instance.category_id = data.get('category', instance.category_id)
+        instance.subcategory_id = data.get('subcategory', instance.subcategory_id)
+        
+        instance.save()
+
+        if is_multi_variant:
+            variants_data = self._extract_variants_data(data)
+            self._update_variants(variants_data, instance)
+        else:
+            # Handle single variant update
+            single_variant_data = {
+                'size': data.get('size'),
+                'price': data.get('price'),
+                'stock': data.get('stock'),
+                'discount': data.get('discount')
+            }
+            # Get the first existing variant
+            existing_variant = instance.productvariant_set.first()
+            if existing_variant:
+                existing_variant.price = single_variant_data['price']
+                existing_variant.stock = single_variant_data['stock']
+                existing_variant.discount = single_variant_data['discount']
+                existing_variant.save()
+
+        return Response({'msg': 'Product updated successfully'}, status=status.HTTP_200_OK)
+
+    def _update_variants(self, variants_data, product):
+        existing_variants = {variant.id: variant for variant in product.productvariant_set.all()}
+        existing_sizes = {variant.size for variant in existing_variants.values()}  # Track existing sizes
+
+        for variant_data in variants_data:
+            variant_id = variant_data.get('id')
+            size = variant_data.get('size')
+
+            if variant_id and variant_id in existing_variants:
+                # Update existing variant
+                variant = existing_variants[variant_id]
+                variant.price = variant_data['price']
+                variant.stock = variant_data['stock']
+                variant.discount = variant_data['discount']
+                variant.save()
+            elif size not in existing_sizes:
+                # Create new variant if size does not exist
+                variant_data['product'] = product.id
+                variant_serializer = ProductVariantSerializer(data=variant_data)
+                variant_serializer.is_valid(raise_exception=True)
+                variant_serializer.save()
+            else:
+                # Handle case where size already exists
+                raise ValidationError(f"Variant with size '{size}' already exists for this product.")
+
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def recommended(self, request):
         recommended_products = get_recommended_products(request.user)
