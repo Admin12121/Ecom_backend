@@ -95,12 +95,14 @@ class ProductViewSet(viewsets.ModelViewSet):
         variants_data = []
         index = 0
         while True:
+            id = data.get(f'variants[{index}][id]')
             size = data.get(f'variants[{index}][size]')
             price = data.get(f'variants[{index}][price]')
             stock = data.get(f'variants[{index}][stock]')
             discount = data.get(f'variants[{index}][discount]')
             if size or price or stock or discount:
                 variant = {
+                    'id': id,
                     'size': size,
                     'price': price,
                     'stock': stock,
@@ -195,14 +197,12 @@ class ProductViewSet(viewsets.ModelViewSet):
             variants_data = self._extract_variants_data(data)
             self._update_variants(variants_data, instance)
         else:
-            # Handle single variant update
             single_variant_data = {
                 'size': data.get('size'),
                 'price': data.get('price'),
                 'stock': data.get('stock'),
                 'discount': data.get('discount')
             }
-            # Get the first existing variant
             existing_variant = instance.productvariant_set.first()
             if existing_variant:
                 existing_variant.price = single_variant_data['price']
@@ -214,28 +214,31 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def _update_variants(self, variants_data, product):
         existing_variants = {variant.id: variant for variant in product.productvariant_set.all()}
-        existing_sizes = {variant.size for variant in existing_variants.values()}  # Track existing sizes
 
         for variant_data in variants_data:
             variant_id = variant_data.get('id')
+            if variant_id:
+                variant_id = int(variant_id)
+            else:
+                variant_id = None
             size = variant_data.get('size')
 
             if variant_id and variant_id in existing_variants:
-                # Update existing variant
                 variant = existing_variants[variant_id]
+                variant.size = size
                 variant.price = variant_data['price']
                 variant.stock = variant_data['stock']
                 variant.discount = variant_data['discount']
                 variant.save()
-            elif size not in existing_sizes:
-                # Create new variant if size does not exist
+            else:
+                if any(v.size == size for v in existing_variants.values()):
+                    raise ValidationError(f"Variant with size '{size}' already exists for this product.")
+                print(product.id)
                 variant_data['product'] = product.id
+                variant_data.pop('id', None)
                 variant_serializer = ProductVariantSerializer(data=variant_data)
                 variant_serializer.is_valid(raise_exception=True)
                 variant_serializer.save()
-            else:
-                # Handle case where size already exists
-                raise ValidationError(f"Variant with size '{size}' already exists for this product.")
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def recommended(self, request):
@@ -408,6 +411,11 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
     queryset = ProductVariant.objects.select_related('product').all()
     serializer_class = ProductVariantSerializer
     permission_classes = [IsAdminOrReadOnly]
+
+    def destroy(self, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response({ "message" : "Variant Deleted"}, status=status.HTTP_200_OK)    
 
 class ProductImageViewSet(viewsets.ModelViewSet):
     queryset = ProductImage.objects.select_related('variant').all()
