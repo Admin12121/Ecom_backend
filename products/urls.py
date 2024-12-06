@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     CategoryViewSet, SubcategoryViewSet, ProductViewSet, ProductVariantViewSet,
-    ProductImageViewSet, ReviewViewSet, CommentViewSet, CommentReplyViewSet,
+    ProductImageViewSet, ReviewViewSet, CommentViewSet, CommentReplyViewSet, StocksView,
     TrendingView, RecommendationView, NotifyUserViewSet, AddToCartViewSet, ReviewPostViewSet,
     )
 
@@ -27,4 +27,5 @@ urlpatterns = [
     path('get_products_by_ids/', ProductViewSet.as_view({'get': 'get_products_by_ids'}), name='get-products-by-ids'), 
     path('cart/<int:product_id>/variant/<int:variant_id>/', AddToCartViewSet.as_view({'delete':'cartdestroy'}), name='cartdestroy'),
     path('reviews/user/', ReviewViewSet.as_view({'get': 'get_user_reviews'}), name='user-reviews'),
+    path('stocks/', StocksView.as_view(), name='stocks')
 ]

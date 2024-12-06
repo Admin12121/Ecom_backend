@@ -13,12 +13,12 @@ class Redeem_Code(models.Model):
    discount = models.IntegerField(null=True, blank=True)
    minimum = models.IntegerField(null=True, blank=True)
    limit = models.IntegerField(null=True, blank=True)
-   used = models.IntegerField(null=True, blank=True)
+   used = models.IntegerField(null=True, blank=True, default=0)
    valid_until = models.DateField(null=True, blank=True)
    is_active = models.BooleanField(null=True, blank=True)
 
-   def __str__(self):
-      return self.name
+#    def __str__(self):
+#       return self.name
 
 
 class Sales(models.Model):

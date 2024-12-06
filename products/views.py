@@ -45,6 +45,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.prefetch_related('subcategory_set').all()
     permission_classes = [IsAdminOrReadOnly]
+
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
             return CategoryViewSerializer
@@ -668,3 +669,13 @@ class AddToCartViewSet(viewsets.ModelViewSet):
         except AddtoCart.DoesNotExist:
             return Response({'error': 'Item not found in cart'}, status=status.HTTP_404_NOT_FOUND)
         
+class StocksView(APIView):
+    permission_classes = [IsAdminOrReadOnly]
+    pagination_class = StandardResultsSetPagination
+
+    def get(self, request, *args, **kwargs):
+        low_stock_products = Product.objects.filter(productvariant__stock__lt=5).distinct()
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(low_stock_products, request)
+        serializer = LowStockProductSerializer(page, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)

@@ -212,3 +212,39 @@ class ReviewWithProductSerializer(serializers.ModelSerializer):
         if request and request.method == 'GET':
             representation['review_images'] = ReviewImageSerializer(instance.review_images.all(), many=True, context=self.context).data
         return representation
+    
+class NotifySerializer(serializers.ModelSerializer):
+    user = serializers.SerializerMethodField()
+    class Meta:
+        model = NotifyUser
+        fields = ['email', 'user']
+
+    def get_user(self, obj):
+        return obj.user.email if obj.user else None
+
+class LowStockVariantSerializer(serializers.ModelSerializer):
+    notify_users = serializers.SerializerMethodField()
+    class Meta:
+        model = ProductVariant
+        fields = ['id', 'size', 'price', 'stock', 'discount', 'notify_users']
+
+    def get_notify_users(self, obj):
+        notify_users = NotifyUser.objects.filter(product=obj.product, variant=obj.id)
+        return NotifySerializer(notify_users, many=True).data
+
+
+class LowStockProductSerializer(serializers.ModelSerializer):
+    low_stock_variants = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+    class Meta:
+        model = Product
+        fields = ['id', 'product_name', 'description', 'category', 'subcategory', 'productslug', 'image', 'low_stock_variants']
+
+    def get_low_stock_variants(self, obj):
+        low_stock_variants = obj.productvariant_set.filter(stock__lt=5)
+        return LowStockVariantSerializer(low_stock_variants, many=True).data
+
+    def get_image(self, obj):
+        first_image = obj.images.first()
+        request = self.context.get('request')
+        return request.build_absolute_uri(first_image.image.url) if first_image else None        

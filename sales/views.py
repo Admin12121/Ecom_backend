@@ -135,13 +135,6 @@ class RedeemCodeViewSet(viewsets.ModelViewSet):
             raise serializers.ValidationError({'error': f'{name} already exists in this store'})
         serializer.save()
 
-    def perform_update(self, serializer):
-        instance = serializer.save()
-        if instance.valid < timezone.now().date():
-            raise serializers.ValidationError({"message": "Redemption code is expired or inactive."})
-        if instance.used >= instance.limit:
-            raise serializers.ValidationError({"message": "Maximum limit reached for this redemption code."})
-
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         name = instance.name
