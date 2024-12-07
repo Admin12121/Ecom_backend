@@ -20,7 +20,7 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 100
 
 class SalesViewSet(viewsets.ModelViewSet):
-    queryset = Sales.objects.all()
+    queryset = Sales.objects.all().order_by('-id')
     renderer_classes = [UserRenderer]
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
@@ -112,7 +112,7 @@ class SalesViewSet(viewsets.ModelViewSet):
         return Response({"message": "payment complete"}, status=status.HTTP_201_CREATED)
 
 class RedeemCodeViewSet(viewsets.ModelViewSet):
-    queryset = Redeem_Code.objects.all()
+    queryset = Redeem_Code.objects.all().order_by('-id')
     serializer_class = RedeemSerializer
     renderer_classes = [UserRenderer]
     permission_classes = [IsAuthenticated]

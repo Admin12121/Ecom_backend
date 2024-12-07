@@ -51,6 +51,15 @@ class CategoryViewSet(viewsets.ModelViewSet):
             return CategoryViewSerializer
         return CategorySerializer    
 
+    @action(methods=['get'], detail=False, permission_classes=[IsAuthenticated])
+    def get_category(self, request, *args, **kwargs):
+        category = Category.objects.all().order_by('-id')
+        page = self.paginate_queryset(category)
+        if page is not None:
+            serializer = CategorySerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        serializer = CategorySerializer(category, many=True, context={'request': request})
+        return Response(serializer.data)
 
 class SubcategoryViewSet(viewsets.ModelViewSet):
     queryset = Subcategory.objects.select_related('category').all()
