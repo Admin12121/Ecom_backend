@@ -8,4 +8,5 @@ router.register(r'redeemcode', RedeemCodeViewSet, basename='redeem-code')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('sales/transaction/<str:transactionuid>/', SalesViewSet.as_view({'get': 'retrieve'}), name='sales-detail'),
 ]

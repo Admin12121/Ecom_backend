@@ -13,7 +13,8 @@ from accounts.renderers import UserRenderer
 from rest_framework.decorators import action
 from django.db import transaction 
 from accounts.models import DeliveryAddress
-
+from rest_framework.exceptions import ValidationError
+from django.db.models import Count, Q, Prefetch
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
@@ -26,18 +27,29 @@ class SalesViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['costumer_name']
-    search_fields = ['costumer_name__username', 'invoiceno']
+    search_fields = ['costumer_name__first_name', 'transactionuid', 'costumer_name__email']
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return SalesPostDataSerializer
         return SalesDataSerializer
     
+    def retrieve(self, request, *args, **kwargs):
+        transactionuid = kwargs.get('transactionuid')
+        instance = get_object_or_404(Sales, transactionuid=transactionuid)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
     def get_queryset(self):
+        search = self.request.query_params.get('search')
+        filters = Q()
+        if search:
+            filters &= Q(costumer_name__first_name__icontains=search) | Q(transactionuid__icontains=search) | Q(costumer_name__email__icontains=search)
+        queryset = self.queryset.filter(filters)
         user = self.request.user
         if user.is_superuser:
-            return Sales.objects.all()
-        return Sales.objects.filter(costumer_name=user)
+            return queryset
+        return queryset.filter(costumer_name=user)
 
     def perform_create(self, serializer):
         invoice_data = self.request.data.get('products', [])
@@ -110,6 +122,26 @@ class SalesViewSet(viewsets.ModelViewSet):
                 )
 
         return Response({"message": "payment complete"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], url_path='status/(?P<status_param>[^/.]+)')
+    def filter_by_status(self, request, status_param=None):
+        status_map = {
+            'onshipping': ['pending', 'verified'],
+            'arrived': ['proceed', 'packed'],
+            'delivered': ['delivered', 'successful']
+        }
+
+        if status_param not in status_map:
+            raise ValidationError({'error': 'Invalid status parameter'})
+
+        queryset = self.filter_queryset(self.get_queryset().filter(status__in=status_map[status_param]))
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
 
 class RedeemCodeViewSet(viewsets.ModelViewSet):
     queryset = Redeem_Code.objects.all().order_by('-id')
