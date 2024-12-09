@@ -1,9 +1,9 @@
 from rest_framework import viewsets, status, filters, serializers
 from rest_framework.response import Response
+from .serializers import *
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
-from .serializers import SalesDataSerializer, RedeemSerializer, SalesPostDataSerializer
 from .models import Sales, Redeem_Code, Saled_Products
 from products.models import Product, ProductVariant
 from django.shortcuts import get_object_or_404
@@ -15,6 +15,7 @@ from django.db import transaction
 from accounts.models import DeliveryAddress
 from rest_framework.exceptions import ValidationError
 from django.db.models import Count, Q, Prefetch
+from ecom_backend.utils.encryption import encrypt_response
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
@@ -32,12 +33,13 @@ class SalesViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return SalesPostDataSerializer
-        return SalesDataSerializer
+        return SaleQuertSetSerializer
     
+    @encrypt_response
     def retrieve(self, request, *args, **kwargs):
         transactionuid = kwargs.get('transactionuid')
         instance = get_object_or_404(Sales, transactionuid=transactionuid)
-        serializer = self.get_serializer(instance)
+        serializer = SalesDataSerializer(instance)
         return Response(serializer.data)
 
     def get_queryset(self):
@@ -172,7 +174,7 @@ class RedeemCodeViewSet(viewsets.ModelViewSet):
         name = instance.name
         self.perform_destroy(instance)
         return Response({'msg': f'Redeem code {name} deleted successfully'}, status=status.HTTP_200_OK)
-    
+        
     @action(detail=False, methods=['post'], url_path='verify-code')
     def verify_code(self, request):
         code = request.data.get('code')
