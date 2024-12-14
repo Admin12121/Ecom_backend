@@ -582,6 +582,12 @@ class DeliveryAddressView(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = CustomPagination
 
+    def get_queryset(self):
+        user = self.request.user
+        queryset = super().get_queryset()
+        queryset = queryset.filter(user=user)
+        return queryset
+
     def create(self, request, *args, **kwargs):
         user = request.user
         data = request.data.copy()

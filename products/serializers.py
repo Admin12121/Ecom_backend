@@ -43,8 +43,8 @@ class ProductSerializer(serializers.ModelSerializer):
     categoryname = serializers.SerializerMethodField()
     subcategoryname = serializers.SerializerMethodField()    
     comments = serializers.SerializerMethodField()    
-    rating = serializers.SerializerMethodField()  # Add this line
-    total_ratings = serializers.SerializerMethodField()  # Add this line
+    rating = serializers.SerializerMethodField()
+    total_ratings = serializers.SerializerMethodField() 
 
     class Meta:
         model = Product
@@ -64,9 +64,10 @@ class ProductSerializer(serializers.ModelSerializer):
         return None
 
     def get_rating(self, obj):
-        return obj.get_average_rating()
+        average_rating = obj.get_average_rating()
+        return round(average_rating, 2) if average_rating is not None else None
 
-    def get_total_ratings(self, obj):  # Add this method
+    def get_total_ratings(self, obj):
         return obj.get_total_ratings()
 
     def to_representation(self, instance):

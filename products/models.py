@@ -29,6 +29,7 @@ class Subcategory(models.Model):
 class Product(models.Model):
     product_name = models.CharField(max_length=255)
     description = models.TextField()
+    deactive = models.BooleanField(default=False)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     subcategory = models.ForeignKey(Subcategory, on_delete=models.CASCADE)
     productslug = models.CharField(max_length=100, null=True, blank=True)

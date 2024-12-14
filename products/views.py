@@ -72,7 +72,6 @@ class ProductViewSet(viewsets.ModelViewSet):
     permission_classes = [CustomReadOnly]
     parser_classes = [MultiPartParser, FormParser]
     pagination_class = StandardResultsSetPagination
-    # pagination_class = None
     
     def create(self, request, *args, **kwargs):
         data = request.data
@@ -162,8 +161,15 @@ class ProductViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         productslug = self.request.query_params.get('productslug')
         
+        if not self.request.user.is_authenticated:
+            queryset = queryset.filter(deactive=False)
+        elif not self.request.user.is_staff:
+            queryset = queryset.filter(deactive=False)
+
         if productslug:
             queryset = queryset.filter(productslug=productslug)
+            if not queryset.exists():
+                raise Http404("Product not found")
         else:        
             category = self.request.query_params.get('category')
             categoryslug = self.request.query_params.get('categoryslug')
@@ -327,6 +333,12 @@ class ProductViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(queryset, many=True, context={'request': request, 'is_detail': False})
             return Response(serializer.data)
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.deactive = not instance.deactive
+        instance.save()
+        return Response({"message":"Product deleted successfull"},status=status.HTTP_200_OK)
+
 def get_recommended_products(self, user):
     search_history = SearchHistory.objects.filter(user=user).values_list('keyword', flat=True)
     if not search_history:
@@ -488,6 +500,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
         product_slug = self.kwargs.get('product_slug')
         star = self.request.query_params.get('star')
         filter = self.request.query_params.get('filter')
+        search = self.request.query_params.get('search')
         if product_slug:
             queryset = queryset.filter(product__productslug=product_slug)
         if self.request.user.is_authenticated:
@@ -497,7 +510,8 @@ class ReviewViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied({"detail": "You are not authorized to view reviews"})
         if star and star != '0':
             queryset = queryset.filter(rating=star)
-        
+        if search:
+            queryset = queryset.filter(Q(product__product_name__icontains=search) | Q(user__username__icontains=search) | Q(user__first_name__icontains=search))
         if filter == 'recent':
             queryset = queryset.order_by('-created_at')
         elif filter == 'rating':
@@ -522,7 +536,11 @@ class ReviewViewSet(viewsets.ModelViewSet):
         user = request.user
         if not user:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-        reviews = Review.objects.filter(user=user).order_by('-created_at')
+        reviews = self.get_queryset()
+        if user.is_staff:
+            reviews = reviews
+        else:
+            reviews = reviews.filter(user=user)
         page = self.paginate_queryset(reviews)
         if page is not None:
             serializer = ReviewWithProductSerializer(page, many=True, context={'request': request})
