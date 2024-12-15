@@ -28,7 +28,7 @@ class ImageDataSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()    
     class Meta:
         model = ProductImage
-        fields = ['image']
+        fields = ['id','image']
 
     def get_image(self, obj):
         request = self.context.get('request')

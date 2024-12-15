@@ -440,9 +440,21 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
         return Response({ "message" : "Variant Deleted"}, status=status.HTTP_200_OK)    
 
 class ProductImageViewSet(viewsets.ModelViewSet):
-    queryset = ProductImage.objects.select_related('variant').all()
+    queryset = ProductImage.objects.all()
     serializer_class = ProductImageSerializer
     permission_classes = [IsAdminOrReadOnly]
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({ "message" : "Image Updated"}, status=status.HTTP_200_OK) 
+
+    def destroy(self, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response({ "message" : "Image Removed"}, status=status.HTTP_200_OK)    
 
 class ReviewPostViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.select_related('product', 'user').all().order_by('-id')
