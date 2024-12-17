@@ -1,3 +1,4 @@
+import re
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -11,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 from django.utils import timezone
-from django.db.models import Count, Q, Prefetch
+from django.db.models import Count, Q, Prefetch, Max, Min, Sum
 from collections import Counter
 from accounts.models import (SearchHistory )
 from rest_framework.permissions import IsAuthenticated , IsAuthenticatedOrReadOnly, AllowAny
@@ -158,45 +159,115 @@ class ProductViewSet(viewsets.ModelViewSet):
                 image_serializer.save()
 
     def get_queryset(self):
+        """
+        Filters and returns a queryset based on user, query parameters, and other conditions.
+        """
         queryset = super().get_queryset()
-        productslug = self.request.query_params.get('productslug')
-        
-        if not self.request.user.is_authenticated:
-            queryset = queryset.filter(deactive=False)
-        elif not self.request.user.is_staff:
+        params = self.request.query_params
+        user = self.request.user
+
+        # Handle unauthenticated and non-staff users
+        if not user.is_authenticated or not user.is_staff:
             queryset = queryset.filter(deactive=False)
 
+        # Handle product-specific filters
+        productslug = params.get('productslug')
         if productslug:
             queryset = queryset.filter(productslug=productslug)
             if not queryset.exists():
                 raise Http404("Product not found")
-        else:        
-            category = self.request.query_params.get('category')
-            categoryslug = self.request.query_params.get('categoryslug')
-            subcategory = self.request.query_params.get('subcategory')
-            subcategoryslug = self.request.query_params.get('subcategoryslug')
-            min_price = self.request.query_params.get('min_price')
-            max_price = self.request.query_params.get('max_price')
-            search = self.request.query_params.get('search')
+            return queryset
 
-            filters = Q()
-            if category:
-                filters &= Q(category__name__icontains=category)
-            if categoryslug:
-                filters &= Q(category__categoryslug__icontains=categoryslug)
-            if subcategory:
-                filters &= Q(subcategory__name__icontains=subcategory)
-            if subcategoryslug:
-                filters &= Q(subcategory__subcategoryslug__icontains=subcategoryslug)
-            if min_price:
-                filters &= Q(productvariant__price__gte=min_price)
-            if max_price:
-                filters &= Q(productvariant__price__lte=max_price)
-            if search:
-                filters &= Q(product_name__icontains=search) | Q(description__icontains=search)
-            queryset = queryset.filter(filters).distinct()
-        
+        # Handle category, price, and stock filters
+        filters = Q()
+        filters &= self._build_category_filters(params)
+        filters &= self._build_price_filters(params)
+        filters &= self._build_attribute_filters(params)
+
+        # Annotate required fields
+        queryset = queryset.annotate(
+            min_variant_price=Min('productvariant__price'),
+            max_variant_price=Max('productvariant__price'),
+            sales_count=Sum('productvariant__saled_products__qty'),
+            total_variant_stock=Sum('productvariant__stock'),
+        )
+
+        # Apply ordering
+        queryset = self._apply_ordering(queryset, params.get('filter'))
+
+        # Final filtering
+        queryset = queryset.filter(filters).distinct()
         return queryset
+
+    def _build_category_filters(self, params):
+        """Build category-related filters."""
+        filters = Q()
+        category = params.get('category')
+        categoryslug = params.get('categoryslug')
+        subcategory = params.get('subcategory')
+        subcategoryslug = params.get('subcategoryslug')
+
+        if category:
+            filters &= Q(category__name__icontains=category)
+        if categoryslug:
+            filters &= Q(category__categoryslug__icontains=categoryslug)
+        if subcategory:
+            filters &= Q(subcategory__name__icontains=subcategory)
+        if subcategoryslug:
+            filters &= Q(subcategory__subcategoryslug__icontains=subcategoryslug)
+
+        return filters
+
+    def _build_price_filters(self, params):
+        """Build price-related filters."""
+        min_price = params.get('min_price')
+        max_price = params.get('max_price')
+        price_filter = Q()
+
+        if min_price:
+            price_filter &= Q(productvariant__price__gte=min_price)
+        if max_price:
+            price_filter &= Q(productvariant__price__lte=max_price)
+
+        return price_filter
+
+    def _build_attribute_filters(self, params):
+        """Build attribute-related filters like color, size, and metal."""
+        filters = Q()
+        attributes = {
+            'color': 'description__icontains',
+            'size': 'description__icontains',
+            'metal': 'description__icontains'
+        }
+
+        for attr, query_field in attributes.items():
+            param = params.get(attr, '')
+            values = [v.strip() for v in param.split(',') if v.strip()]
+            values += [v.strip() for v in params.getlist(attr) if v.strip()]
+            if values:
+                attr_filter = Q()
+                for value in values:
+                    attr_filter |= Q(**{query_field: f'#{value}'})
+                filters &= attr_filter
+
+        # Handle stock filter
+        stock_filter = params.get('stock')
+        if stock_filter == 'in':
+            filters &= Q(total_variant_stock__gt=0)
+        elif stock_filter == 'out':
+            filters &= Q(total_variant_stock__lte=0)
+
+        return filters
+
+    def _apply_ordering(self, queryset, order_by):
+        """Apply ordering based on filter parameter."""
+        ordering_map = {
+            'bestselling': '-sales_count',
+            'newin': '-id',
+            'hightolow': '-min_variant_price',
+            'lowtohigh': 'min_variant_price'
+        }
+        return queryset.order_by(ordering_map.get(order_by, '-id'))
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
