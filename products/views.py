@@ -159,18 +159,13 @@ class ProductViewSet(viewsets.ModelViewSet):
                 image_serializer.save()
 
     def get_queryset(self):
-        """
-        Filters and returns a queryset based on user, query parameters, and other conditions.
-        """
         queryset = super().get_queryset()
         params = self.request.query_params
         user = self.request.user
 
-        # Handle unauthenticated and non-staff users
         if not user.is_authenticated or not user.is_staff:
             queryset = queryset.filter(deactive=False)
 
-        # Handle product-specific filters
         productslug = params.get('productslug')
         if productslug:
             queryset = queryset.filter(productslug=productslug)
@@ -178,13 +173,11 @@ class ProductViewSet(viewsets.ModelViewSet):
                 raise Http404("Product not found")
             return queryset
 
-        # Handle category, price, and stock filters
         filters = Q()
         filters &= self._build_category_filters(params)
         filters &= self._build_price_filters(params)
         filters &= self._build_attribute_filters(params)
 
-        # Annotate required fields
         queryset = queryset.annotate(
             min_variant_price=Min('productvariant__price'),
             max_variant_price=Max('productvariant__price'),
@@ -192,15 +185,12 @@ class ProductViewSet(viewsets.ModelViewSet):
             total_variant_stock=Sum('productvariant__stock'),
         )
 
-        # Apply ordering
         queryset = self._apply_ordering(queryset, params.get('filter'))
 
-        # Final filtering
         queryset = queryset.filter(filters).distinct()
         return queryset
 
     def _build_category_filters(self, params):
-        """Build category-related filters."""
         filters = Q()
         category = params.get('category')
         categoryslug = params.get('categoryslug')
@@ -219,7 +209,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         return filters
 
     def _build_price_filters(self, params):
-        """Build price-related filters."""
         min_price = params.get('min_price')
         max_price = params.get('max_price')
         price_filter = Q()
