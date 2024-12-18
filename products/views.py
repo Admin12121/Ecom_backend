@@ -560,7 +560,18 @@ class ReviewPostViewSet(viewsets.ModelViewSet):
                         transaction.set_rollback(True)
                         raise e
         return Response({"msg": "Review Updated Successfully"}, status=status.HTTP_200_OK)
-                        
+
+    @action(detail=False, methods=['patch'], permission_classes=[IsAuthenticated])                
+    def update_reviews(self, request, *args, **kwargs):
+        instance = self.get_object()
+        data = request.data
+        if request.user.id != instance.user.id and request.user.role != 'Admin' and request.user.role != 'Staff':
+            return Response({"detail": "You are not authorized to update this review data."}, status=status.HTTP_403_FORBIDDEN)
+        serializer = self.get_serializer(instance, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"msg": "Review Updated Successfully"}, status=status.HTTP_200_OK)
+
 class ReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.select_related('product', 'user').all().order_by('-id')
     serializer_class = ReviewSerializer

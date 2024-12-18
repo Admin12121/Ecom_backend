@@ -23,6 +23,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('trending/', TrendingView.as_view(), name='trending'),
     path("reviews/", ReviewViewSet.as_view({'get': 'list'}), name='admin-reviews'),
+    path("reviews-update/<int:pk>/", ReviewPostViewSet.as_view({'patch': 'update_reviews'}), name='admin-review-detail'),
     path('recommendations/', RecommendationView.as_view(), name='recommendations'),
     path('get_products_by_ids/', ProductViewSet.as_view({'get': 'get_products_by_ids'}), name='get-products-by-ids'), 
     path('cart/<int:product_id>/variant/<int:variant_id>/', AddToCartViewSet.as_view({'delete':'cartdestroy'}), name='cartdestroy'),

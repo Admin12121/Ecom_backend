@@ -41,8 +41,8 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     categoryname = serializers.SerializerMethodField()
-    subcategoryname = serializers.SerializerMethodField()    
-    comments = serializers.SerializerMethodField()    
+    subcategoryname = serializers.SerializerMethodField()     
+    reviews = serializers.SerializerMethodField()    
     rating = serializers.SerializerMethodField()
     total_ratings = serializers.SerializerMethodField() 
 
@@ -56,12 +56,11 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_subcategoryname(self, obj):
         return obj.subcategory.name if obj.subcategory else None
 
-    def get_comments(self, obj):
+    def get_reviews(self, obj):
         request = self.context.get('request')
         if request and request.method == 'GET' and self.context.get('is_detail', False):
-            comments = obj.comments.all()
-            return CommentSerializer(comments, many=True, context=self.context).data
-        return None
+            reviews = obj.reviews.all().filter(favoutare=True)
+            return ReviewSerializer(reviews, many=True, context=self.context).data
 
     def get_rating(self, obj):
         average_rating = obj.get_average_rating()
@@ -77,10 +76,6 @@ class ProductSerializer(serializers.ModelSerializer):
         if request and request.method == 'GET':
             variants = instance.productvariant_set.all()
             images = instance.images.all()
-            if self.context.get('is_detail', False):
-                comments = instance.comments.all()
-                representation['comments'] = CommentSerializer(comments, many=True, context=self.context).data
-
 
             variants_data = ProductVariantSerializer(variants, many=True).data
             if len(variants_data) == 1:
@@ -90,10 +85,6 @@ class ProductSerializer(serializers.ModelSerializer):
             representation['images'] = ImageDataSerializer(images, many=True, context= self.context).data
             representation['categoryname'] = self.get_categoryname(instance)
             representation['subcategoryname'] = self.get_subcategoryname(instance)            
-
-            # Remove reviews and comments if they are None or empty list
-            if representation['comments'] is None:
-                del representation['comments']
                 
         return representation
 
@@ -147,10 +138,13 @@ class ReviewImageSerializer(serializers.ModelSerializer):
         return None
 class ReviewSerializer(serializers.ModelSerializer):
     review_images = ReviewImageSerializer(many=True, read_only=True)
+    user = serializers.SerializerMethodField()
     class Meta:
         model = Review
-        fields = ['user', 'rating', 'title', 'content', 'recommended', 'delivery', 'review_images', 'created_at',]
+        fields = [ 'user', 'rating', 'title', 'content', 'recommended', 'delivery', 'review_images', 'created_at',]
 
+    def get_user(self, obj):
+        return obj.user.first_name if obj.user else None
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -189,7 +183,7 @@ class ReviewWithProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ['user', 'rating', 'title', 'content', 'recommended', 'delivery', 'review_images', 'created_at', 'product_name', 'productslug', 'category_name', 'product_image']
+        fields = ['id', 'user', 'rating', 'title', 'content', 'recommended', 'delivery', 'review_images', 'favoutare', 'created_at', 'product_name', 'productslug', 'category_name', 'product_image']
 
     def get_product_name(self, obj):
         return obj.product.product_name if obj.product else None
