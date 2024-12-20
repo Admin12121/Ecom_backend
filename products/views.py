@@ -173,11 +173,11 @@ class ProductViewSet(viewsets.ModelViewSet):
             if not queryset.exists():
                 raise Http404("Product not found")
             return queryset
+        filters = Q()
+        
         if search:
             filters &= Q(product_name__icontains=search) | Q(description__icontains=search)
-            queryset = queryset.filter(filters).distinct()
-            
-        filters = Q()
+
         filters &= self._build_category_filters(params)
         filters &= self._build_price_filters(params)
         filters &= self._build_attribute_filters(params)
