@@ -167,12 +167,16 @@ class ProductViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(deactive=False)
 
         productslug = params.get('productslug')
+        search = params.get('search')
         if productslug:
             queryset = queryset.filter(productslug=productslug)
             if not queryset.exists():
                 raise Http404("Product not found")
             return queryset
-
+        if search:
+            filters &= Q(product_name__icontains=search) | Q(description__icontains=search)
+            queryset = queryset.filter(filters).distinct()
+            
         filters = Q()
         filters &= self._build_category_filters(params)
         filters &= self._build_price_filters(params)
