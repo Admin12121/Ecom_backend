@@ -33,6 +33,7 @@ class Sales(models.Model):
             ('packed', 'Packed'),
             ('delivered', 'Delivered'),
             ('successful', 'Successful'),
+            ('cancelled', 'Cancelled'),
         ],
         default='pending',
     )

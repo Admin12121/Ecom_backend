@@ -16,6 +16,21 @@ from accounts.models import DeliveryAddress
 from rest_framework.exceptions import ValidationError
 from django.db.models import Count, Q, Prefetch
 from ecom_backend.utils.encryption import encrypt_response
+
+import stripe
+import datetime
+from rest_framework import status
+from ecom_backend import settings
+from django.http import JsonResponse
+from rest_framework.views import APIView
+from django.core.mail import EmailMessage
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
+from rest_framework.permissions import IsAuthenticated
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
@@ -200,3 +215,41 @@ class RedeemCodeViewSet(viewsets.ModelViewSet):
             'limit': redeem_code.limit,
         }
         return Response(data, status=status.HTTP_200_OK)    
+    
+
+class StripeWebhookView(APIView):
+    
+    def post(self, request):
+        payload = request.body.decode('utf-8')
+        sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+        event = None
+        if not sig_header:
+            return JsonResponse({'error': 'Missing signature header'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+            )
+        except ValueError as e:
+            return JsonResponse({'error': 'Invalid payload', 'details': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except stripe.error.SignatureVerificationError as e:
+            return JsonResponse({'error': 'Invalid signature', 'details': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            user = session.get('user')
+            payment_amount = session.get('amount') / 100  
+            payment_intent_id = session.get('payment_intent')
+
+            if user:
+                try:
+                    user = User.objects.get(email=user)
+                    sales_date = Sales.objects.get(costumer_name=user, payment_method=payment_intent_id)
+                    sales_date.status = 'verified'
+                    sales_date.save()
+
+                except User.DoesNotExist:
+                    return JsonResponse({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+                except Sales.DoesNotExist:
+                    return JsonResponse({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        return JsonResponse({'status': 'success'}, status=status.HTTP_200_OK)

@@ -168,6 +168,8 @@ PASSWORD_RESET_TIMEOUT=300          # 300 Sec = 5 Min
 
 CORS_ALLOW_ALL_ORIGINS = True
 
+STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY')
+STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET')
 
 FILE_UPLOAD_HANDLERS = [
     'django.core.files.uploadhandler.TemporaryFileUploadHandler',
